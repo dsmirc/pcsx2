@@ -266,15 +266,7 @@ bool cdvdStartThread()
 	if (cdvd_is_open == false)
 	{
 		cdvd_is_open = true;
-		try
-		{
-			s_thread = std::thread(cdvdThread);
-		}
-		catch (std::system_error&)
-		{
-			cdvd_is_open = false;
-			return false;
-		}
+		s_thread = std::thread(cdvdThread);
 	}
 
 	cdvdCacheReset();

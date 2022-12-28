@@ -211,19 +211,9 @@ bool SPU2open(PS2Modes isRunningPSXMode)
 
 	SPU2InternalReset(isRunningPSXMode);
 
-	try
-	{
-		SampleRate = static_cast<int>(std::round(static_cast<double>(ConsoleSampleRate) * DeviceSampleRateMultiplier));
-		SPU2InitSndBuffer();
-		WaveDump::Open();
-	}
-	catch (std::exception& ex)
-	{
-		Console.Error("SPU2 Error: Could not initialize device, or something.\nReason: %s", ex.what());
-		SPU2close();
-		return false;
-	}
-
+	SampleRate = static_cast<int>(std::round(static_cast<double>(ConsoleSampleRate) * DeviceSampleRateMultiplier));
+	SPU2InitSndBuffer();
+	WaveDump::Open();
 	return true;
 }
 
