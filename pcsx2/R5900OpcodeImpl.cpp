@@ -155,13 +155,16 @@ void Deci2Reset()
 	memzero( deci2buffer );
 }
 
-void SaveStateBase::deci2Freeze()
+bool SaveStateBase::deci2Freeze()
 {
-	FreezeTag( "deci2" );
+	if (!FreezeTag("deci2"))
+		return false;
 
 	Freeze( deci2addr );
 	Freeze( deci2handler );
 	Freeze( deci2buffer );
+
+	return IsOkay();
 }
 
 /*

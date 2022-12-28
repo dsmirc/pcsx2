@@ -29,11 +29,14 @@ void ipuDmaReset()
 	CommandExecuteQueued	= false;
 }
 
-void SaveStateBase::ipuDmaFreeze()
+bool SaveStateBase::ipuDmaFreeze()
 {
-	FreezeTag( "IPUdma" );
+	if (!FreezeTag("IPUdma"))
+		return false;
+
 	Freeze(IPU1Status);
 	Freeze(CommandExecuteQueued);
+	return true;
 }
 
 static __fi int IPU1chain() {

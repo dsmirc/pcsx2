@@ -369,9 +369,10 @@ void gsPostVsyncStart()
 	GetMTGS().PostVsyncStart(registers_written);
 }
 
-void SaveStateBase::gsFreeze()
+bool SaveStateBase::gsFreeze()
 {
 	FreezeMem(PS2MEM_GS, 0x2000);
 	Freeze(gsVideoMode);
+	return IsOkay();
 }
 

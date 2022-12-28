@@ -18,12 +18,15 @@
 #include "SaveState.h"
 #include "Counters.h"
 
-void SaveStateBase::InputRecordingFreeze()
+bool SaveStateBase::InputRecordingFreeze()
 {
 	// NOTE - BE CAREFUL
 	// CHANGING THIS WILL BREAK BACKWARDS COMPATIBILITY ON SAVESTATES
-	FreezeTag("InputRecording");
+	if (!FreezeTag("InputRecording"))
+		return false;
+
 	Freeze(g_FrameCount);
+	return IsOkay();
 }
 
 #include "InputRecording.h"
