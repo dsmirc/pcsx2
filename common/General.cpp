@@ -13,38 +13,27 @@
  *  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#pragma once
-
-#include "common/PageFaultSource.h"
+#include "PrecompiledHeader.h"
+#include "General.h"
 
 // --------------------------------------------------------------------------------------
-//  RecompiledCodeReserve
+//  PageProtectionMode  (implementations)
 // --------------------------------------------------------------------------------------
-// A recompiled code reserve is a simple sequential-growth block of memory which is auto-
-// cleared to INT 3 (0xcc) as needed.
-//
-class RecompiledCodeReserve : public VirtualMemoryReserve
+std::string PageProtectionMode::ToString() const
 {
-	typedef VirtualMemoryReserve _parent;
+	std::string modeStr;
 
-protected:
-	std::string m_profiler_name;
+	if (m_read)
+		modeStr += "Read";
+	if (m_write)
+		modeStr += "Write";
+	if (m_exec)
+		modeStr += "Exec";
 
-public:
-	RecompiledCodeReserve(std::string name);
-	~RecompiledCodeReserve();
+	if (modeStr.empty())
+		return "NoAccess";
+	if (modeStr.length() <= 5)
+		modeStr += "Only";
 
-	void Assign(VirtualMemoryManagerPtr allocator, size_t offset, size_t size);
-	void Reset();
-
-	RecompiledCodeReserve& SetProfilerName(std::string name);
-
-	void ForbidModification();
-	void AllowModification();
-
-	operator u8*() { return m_baseptr; }
-	operator const u8*() const { return m_baseptr; }
-
-protected:
-	void _registerProfiler();
-};
+	return modeStr;
+}

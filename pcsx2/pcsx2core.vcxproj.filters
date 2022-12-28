@@ -1416,6 +1416,9 @@
     <ClCompile Include="SPU2\SndOut_XAudio2.cpp">
       <Filter>System\Ps2\SPU2</Filter>
     </ClCompile>
+    <ClCompile Include="VirtualMemory.cpp">
+      <Filter>System</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Patch.h">
@@ -1449,12 +1452,6 @@
       <Filter>System\Include</Filter>
     </ClInclude>
     <ClInclude Include="System.h">
-      <Filter>System\Include</Filter>
-    </ClInclude>
-    <ClInclude Include="System\SysThreads.h">
-      <Filter>System\Include</Filter>
-    </ClInclude>
-    <ClInclude Include="System\RecTypes.h">
       <Filter>System\Include</Filter>
     </ClInclude>
     <ClInclude Include="Counters.h">
@@ -2359,6 +2356,9 @@
     </ClInclude>
     <ClInclude Include="SPU2\Dma.h">
       <Filter>System\Ps2\SPU2</Filter>
+    </ClInclude>
+    <ClInclude Include="VirtualMemory.h">
+      <Filter>System</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
