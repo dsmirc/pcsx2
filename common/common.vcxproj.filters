@@ -209,6 +209,7 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="General.cpp" />
+    <ClCompile Include="Error.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AlignedMalloc.h">
@@ -493,6 +494,7 @@
     <ClInclude Include="WAVWriter.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Error.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source Files">

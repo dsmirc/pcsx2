@@ -14,6 +14,7 @@ target_sources(common PRIVATE
 	Console.cpp
 	CrashHandler.cpp
 	DynamicLibrary.cpp
+	Error.cpp
 	Exceptions.cpp
 	FastJmp.cpp
 	FileSystem.cpp
@@ -69,6 +70,7 @@ target_sources(common PRIVATE
 	DynamicLibrary.h
 	Easing.h
 	EnumOps.h
+	Error.h
 	Exceptions.h
 	FastJmp.h
 	FileSystem.h
