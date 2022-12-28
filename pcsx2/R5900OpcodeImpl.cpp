@@ -21,10 +21,13 @@
 
 #include "R5900.h"
 #include "R5900OpcodeTables.h"
-#include "R5900Exceptions.h"
 #include "GS.h"
 #include "CDVD/CDVD.h"
 #include "ps2/BiosTools.h"
+#include "Host.h"
+#include "VMManager.h"
+
+#include "fmt/format.h"
 
 GS_VideoMode gsVideoMode = GS_VideoMode::Uninitialized;
 bool gsIsInterlaced = false;
@@ -514,6 +517,15 @@ void DSRLV(){ if (!_Rd_) return; cpuRegs.GPR.r[_Rd_].UD[0] = (u64)(cpuRegs.GPR.r
 //    exceptions, since the lower bits of the address are used to determine the portions
 //    of the address/register operations.
 
+[[ noreturn ]] __noinline static void RaiseAddressError(u32 addr, bool store)
+{
+	const std::string message(fmt::format("Address Error, addr=0x{:x} [{}]", addr, store ? "store" : "load"));
+
+	// TODO: This doesn't actually get raised in the CPU yet.
+	Console.Error(message);
+
+	Cpu->CancelInstruction();
+}
 
 void LB()
 {
@@ -537,8 +549,8 @@ void LH()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 1 )
-		throw R5900Exception::AddressError( addr, false );
+	if (unlikely(addr & 1))
+		RaiseAddressError(addr, false);
 
 	s16 temp = memRead16(addr);
 
@@ -550,8 +562,8 @@ void LHU()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 1 )
-		throw R5900Exception::AddressError( addr, false );
+	if (unlikely(addr & 1))
+		RaiseAddressError(addr, false);
 
 	u16 temp = memRead16(addr);
 
@@ -563,8 +575,8 @@ void LW()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 3 )
-		throw R5900Exception::AddressError( addr, false );
+	if (unlikely(addr & 3))
+		RaiseAddressError(addr, false);
 
 	u32 temp = memRead32(addr);
 
@@ -576,8 +588,8 @@ void LWU()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 3 )
-		throw R5900Exception::AddressError( addr, false );
+	if (unlikely(addr & 3))
+		RaiseAddressError(addr, false);
 
 	u32 temp = memRead32(addr);
 
@@ -664,8 +676,8 @@ void LD()
 {
     s32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 7 )
-		throw R5900Exception::AddressError( addr, false );
+	if (unlikely(addr & 7))
+		RaiseAddressError(addr, false);
 
 	cpuRegs.GPR.r[_Rt_].UD[0] = memRead64(addr);
 }
@@ -726,8 +738,8 @@ void SH()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 1 )
-		throw R5900Exception::AddressError( addr, true );
+	if (unlikely(addr & 1))
+		RaiseAddressError(addr, true);
 
 	memWrite16(addr, cpuRegs.GPR.r[_Rt_].US[0]);
 }
@@ -736,10 +748,10 @@ void SW()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 3 )
-		throw R5900Exception::AddressError( addr, true );
+	if (unlikely(addr & 3))
+		RaiseAddressError(addr, true);
 
-    memWrite32(addr, cpuRegs.GPR.r[_Rt_].UL[0]);
+  memWrite32(addr, cpuRegs.GPR.r[_Rt_].UL[0]);
 }
 
 static const u32 SWL_MASK[4] = { 0xffffff00, 0xffff0000, 0xff000000, 0x00000000 };
@@ -793,8 +805,8 @@ void SD()
 {
 	u32 addr = cpuRegs.GPR.r[_Rs_].UL[0] + _Imm_;
 
-	if( addr & 7 )
-		throw R5900Exception::AddressError( addr, true );
+	if (unlikely(addr & 7))
+		RaiseAddressError(addr, true);
 
     memWrite64(addr,cpuRegs.GPR.r[_Rt_].UD[0]);
 }
