@@ -1341,31 +1341,29 @@ std::string_view Achievements::GetELFNameForHash(const std::string& elf_path)
 
 std::optional<std::vector<u8>> Achievements::ReadELFFromCurrentDisc(const std::string& elf_path)
 {
-	// This CDVD stuff is super nasty and full of exceptions..
 	std::optional<std::vector<u8>> ret;
-	try
+
+	IsoFSCDVD isofs;
+	IsoFile file(isofs);
+	if (!file.open(elf_path))
 	{
-		IsoFSCDVD isofs;
-		IsoFile file(isofs, elf_path);
-		const u32 size = file.getLength();
-
-		ret = std::vector<u8>();
-		ret->resize(size);
-
-		if (size > 0)
-		{
-			const s32 bytes_read = file.read(ret->data(), static_cast<s32>(size));
-			if (bytes_read != static_cast<s32>(size))
-			{
-				Console.Error("(Achievements) Only read %d of %u bytes of ELF '%s'", bytes_read, size, elf_path.c_str());
-				ret.reset();
-			}
-		}
+		Console.Error("(Achievements) Failed to open ELF '%s' on disc.", elf_path);
+		return ret;
 	}
-	catch (...)
+
+	const u32 size = file.getLength();
+
+	ret = std::vector<u8>();
+	ret->resize(size);
+
+	if (size > 0)
 	{
-		Console.Error("(Achievements) Caught exception while trying to read ELF '%s'.", elf_path.c_str());
-		ret.reset();
+		const s32 bytes_read = file.read(ret->data(), static_cast<s32>(size));
+		if (bytes_read != static_cast<s32>(size))
+		{
+			Console.Error("(Achievements) Only read %d of %u bytes of ELF '%s'", bytes_read, size, elf_path.c_str());
+			ret.reset();
+		}
 	}
 
 	return ret;

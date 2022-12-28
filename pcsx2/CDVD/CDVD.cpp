@@ -387,11 +387,15 @@ s32 cdvdWriteConfig(const u8* config)
 }
 
 // Sets ElfCRC to the CRC of the game bound to the CDVD source.
-static __fi void _reloadElfInfo(std::string elfpath)
+static void _reloadElfInfo(std::string elfpath)
 {
 	// Now's a good time to reload the ELF info...
 	if (elfpath == LastELF)
 		return;
+
+	LastELF.clear();
+	ElfEntry = 0;
+	ElfTextRange = {};
 
 	ElfObject elfo;
 	Error error;
@@ -430,8 +434,8 @@ static __fi void _reloadElfInfo(std::string elfpath)
 		}
 
 		IsoFSCDVD isofs;
-		IsoFile file(isofs, elfpath);
-		if (!elfo.openIsoFile(elfpath, file, isPSXElf, &error))
+		IsoFile file(isofs);
+		if (!file.open(elfpath) || !elfo.openIsoFile(elfpath, file, isPSXElf, &error))
 		{
 			Console.Error("Failed to parse CDVD ELF: {}", error.GetMessageString());
 			return;
@@ -508,44 +512,33 @@ void cdvdReloadElfInfo(std::string elfoverride)
 	// and route them through the VM's exception handler.  (needed for non-SEH platforms, such
 	// as Linux/GCC)
 	DevCon.WriteLn(Color_Green, "Reload ELF");
-	try
+
+	std::string elfpath;
+	u32 discType = GetPS2ElfName(elfpath);
+	DiscSerial = ExecutablePathToSerial(elfpath);
+
+	// Use the serial from the disc (if any), and the ELF CRC of the override.
+	if (!elfoverride.empty())
 	{
-		std::string elfpath;
-		u32 discType = GetPS2ElfName(elfpath);
-		DiscSerial = ExecutablePathToSerial(elfpath);
-
-		// Use the serial from the disc (if any), and the ELF CRC of the override.
-		if (!elfoverride.empty())
-		{
-			_reloadElfInfo(std::move(elfoverride));
-			return;
-		}
-
-		if (discType == 1)
-		{
-			// PCSX2 currently only recognizes *.elf executables in proper PS2 format.
-			// To support different PSX titles in the console title and for savestates, this code bypasses all the detection,
-			// simply using the exe name, stripped of problematic characters.
-			return;
-		}
-
-		// Isn't a disc we recognize?
-		if (discType == 0)
-			return;
-
-		// Recognized and PS2 (BOOT2).  Good job, user.
-		_reloadElfInfo(std::move(elfpath));
+		_reloadElfInfo(std::move(elfoverride));
+		return;
 	}
-	catch ([[maybe_unused]] Exception::FileNotFound& e)
+
+	// Needs an enum: 0 = invalid, 1 = PS1, 2 = PS2
+
+	// PCSX2 currently only recognizes *.elf executables in proper PS2 format.
+	// To support different PSX titles in the console title and for savestates, this code bypasses all the detection,
+	// simply using the exe name, stripped of problematic characters.
+	if (discType != 2)
 	{
-		Console.Error("Failed to load ELF info");
-		LastELF.clear();
-		DiscSerial.clear();
 		ElfCRC = 0;
 		ElfEntry = 0;
 		ElfTextRange = {};
 		return;
 	}
+
+	// Recognized and PS2 (BOOT2).  Good job, user.
+	_reloadElfInfo(std::move(elfpath));
 }
 
 void cdvdReadKey(u8, u16, u32 arg2, u8* key)
