@@ -62,6 +62,9 @@ public:
 	void SetHResult(long err, std::string message = std::string());
 #endif
 
+	/// Override the message for an already-set error.
+	void SetMessage(std::string message);
+
 	// constructors
 	static Error CreateNone();
 	static Error CreateErrno(int err, std::string message = std::string());

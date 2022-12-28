@@ -150,6 +150,13 @@ void Error::SetSocket(int err, std::string message /* = std::string() */)
 
 void Error::SetSocket(Error* errptr, int err, std::string message /*= std::string()*/)
 {
+	if (errptr)
+		errptr->SetSocket(err, std::move(message));
+}
+
+void Error::SetMessage(std::string message)
+{
+	m_message = std::move(message);
 }
 
 // constructors
