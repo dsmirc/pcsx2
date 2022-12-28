@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include "common/Error.h"
 #include "common/SafeArray.h"
 #include "common/SafeArray.inl"
 #include "CDVD/IsoFS/IsoFSCDVD.h"
@@ -118,39 +119,36 @@ struct Elf32_Rel {
 	u32	r_info;
 };
 
-class ElfObject
+class ElfObject final
 {
-	private:
-		SafeArray<u8> data;
-		ELF_PHR* proghead = nullptr;
-		ELF_SHR* secthead = nullptr;
-		std::string filename;
+private:
+	std::vector<u8> data;
+	ELF_PHR* proghead = nullptr;
+	ELF_SHR* secthead = nullptr;
 
-		void initElfHeaders(bool isPSXElf);
-		void readIso(IsoFile& file);
-		void readFile();
-		void checkElfSize(s64 elfsize);
+	void initElfHeaders(bool isPSXElf);
+	bool checkElfSize(s64 size, Error* error);
 
-	public:
-		ELF_HEADER& header;
+public:
+	ElfObject();
+	~ElfObject();
 
-		// Destructor!
-		// C++ does all the cleanup automagically for us.
-		virtual ~ElfObject() = default;
+	__fi const ELF_HEADER& getHeader() const { return *reinterpret_cast<const ELF_HEADER*>(data.data()); }
+	__fi u32 getSize() const { return static_cast<u32>(data.size()); }
 
-		ElfObject(std::string srcfile, IsoFile& isofile, bool isPSXElf);
-		ElfObject(std::string srcfile, u32 hdrsize, bool isPSXElf);
+	bool openFile(const std::string& srcfile, bool isPSXElf, Error* error);
+	bool openIsoFile(const std::string& srcfile, IsoFile& isofile, bool isPSXElf, Error* error);
 
-		void loadProgramHeaders();
-		void loadSectionHeaders();
-		void loadHeaders();
+	void loadProgramHeaders();
+	void loadSectionHeaders();
+	void loadHeaders();
 
-		bool hasProgramHeaders();
-		bool hasSectionHeaders();
-		bool hasHeaders();
+	bool hasProgramHeaders() const;
+	bool hasSectionHeaders() const;
+	bool hasHeaders() const;
 
-		std::pair<u32,u32> getTextRange();
-		u32 getCRC();
+	std::pair<u32, u32> getTextRange() const;
+	u32 getCRC() const;
 };
 
 //-------------------

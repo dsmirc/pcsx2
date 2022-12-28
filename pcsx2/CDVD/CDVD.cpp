@@ -387,53 +387,61 @@ s32 cdvdWriteConfig(const u8* config)
 }
 
 // Sets ElfCRC to the CRC of the game bound to the CDVD source.
-static __fi ElfObject* loadElf(std::string filename, bool isPSXElf)
-{
-	if (StringUtil::StartsWith(filename, "host:"))
-	{
-		std::string host_filename(filename.substr(5));
-		s64 host_size = FileSystem::GetPathFileSize(host_filename.c_str());
-		return new ElfObject(std::move(host_filename), static_cast<u32>(std::max<s64>(host_size, 0)), isPSXElf);
-	}
-
-	// Mimic PS2 behavior!
-	// Much trial-and-error with changing the ISOFS and BOOT2 contents of an image have shown that
-	// the PS2 BIOS performs the peculiar task of *ignoring* the version info from the parsed BOOT2
-	// filename *and* the ISOFS, when loading the game's ELF image.  What this means is:
-	//
-	//   1. a valid PS2 ELF can have any version (ISOFS), and the version need not match the one in SYSTEM.CNF.
-	//   2. the version info on the file in the BOOT2 parameter of SYSTEM.CNF can be missing, 10 chars long,
-	//      or anything else.  Its all ignored.
-	//   3. Games loading their own files do *not* exhibit this behavior; likely due to using newer IOP modules
-	//      or lower level filesystem APIs (fortunately that doesn't affect us).
-	//
-	// FIXME: Properly mimicing this behavior is troublesome since we need to add support for "ignoring"
-	// version information when doing file searches.  I'll add this later.  For now, assuming a ;1 should
-	// be sufficient (no known games have their ELF binary as anything but version ;1)
-	const std::string::size_type semi_pos = filename.rfind(';');
-	if (semi_pos != std::string::npos && std::string_view(filename).substr(semi_pos) != ";1")
-	{
-		Console.WriteLn(Color_Blue, "(LoadELF) Non-conforming version suffix (%s) detected and replaced.", filename.c_str());
-		filename.erase(semi_pos);
-		filename += ";1";
-	}
-
-	IsoFSCDVD isofs;
-	IsoFile file(isofs, filename);
-	return new ElfObject(std::move(filename), file, isPSXElf);
-}
-
 static __fi void _reloadElfInfo(std::string elfpath)
 {
 	// Now's a good time to reload the ELF info...
 	if (elfpath == LastELF)
 		return;
 
-	std::unique_ptr<ElfObject> elfptr(loadElf(elfpath, false));
-	elfptr->loadHeaders();
-	ElfCRC = elfptr->getCRC();
-	ElfEntry = elfptr->header.e_entry;
-	ElfTextRange = elfptr->getTextRange();
+	ElfObject elfo;
+	Error error;
+	
+	if (StringUtil::StartsWith(elfpath, "host:"))
+	{
+		std::string host_filename(elfpath.substr(5));
+		if (!elfo.openFile(host_filename, isPSXElf, &error))
+		{
+			Console.Error("Failed to parse host ELF: {}", error.GetMessageString());
+			return;
+		}
+	}
+	else
+	{
+		// Mimic PS2 behavior!
+		// Much trial-and-error with changing the ISOFS and BOOT2 contents of an image have shown that
+		// the PS2 BIOS performs the peculiar task of *ignoring* the version info from the parsed BOOT2
+		// filename *and* the ISOFS, when loading the game's ELF image.  What this means is:
+		//
+		//   1. a valid PS2 ELF can have any version (ISOFS), and the version need not match the one in SYSTEM.CNF.
+		//   2. the version info on the file in the BOOT2 parameter of SYSTEM.CNF can be missing, 10 chars long,
+		//      or anything else.  Its all ignored.
+		//   3. Games loading their own files do *not* exhibit this behavior; likely due to using newer IOP modules
+		//      or lower level filesystem APIs (fortunately that doesn't affect us).
+		//
+		// FIXME: Properly mimicing this behavior is troublesome since we need to add support for "ignoring"
+		// version information when doing file searches.  I'll add this later.  For now, assuming a ;1 should
+		// be sufficient (no known games have their ELF binary as anything but version ;1)
+		const std::string::size_type semi_pos = elfpath.rfind(';');
+		if (semi_pos != std::string::npos && std::string_view(elfpath).substr(semi_pos) != ";1")
+		{
+			Console.WriteLn(Color_Blue, "(LoadELF) Non-conforming version suffix (%s) detected and replaced.", elfpath.c_str());
+			elfpath.erase(semi_pos);
+			elfpath += ";1";
+		}
+
+		IsoFSCDVD isofs;
+		IsoFile file(isofs, elfpath);
+		if (!elfo.openIsoFile(elfpath, file, isPSXElf, &error))
+		{
+			Console.Error("Failed to parse CDVD ELF: {}", error.GetMessageString());
+			return;
+		}
+	}
+	
+	elfo.loadHeaders();
+	ElfCRC = elfo.getCRC();
+	ElfEntry = elfo.getHeader().e_entry;
+	ElfTextRange = elfo.getTextRange();
 	LastELF = std::move(elfpath);
 
 	Console.WriteLn(Color_StrongBlue, "ELF (%s) Game CRC = 0x%08X, EntryPoint = 0x%08X", LastELF.c_str(), ElfCRC, ElfEntry);
@@ -443,25 +451,6 @@ static __fi void _reloadElfInfo(std::string elfpath)
 	// BIOS code, and patches and cheats should not be applied yet.  (they are applied when
 	// eeGameStarting is invoked, which is when the VM starts executing the actual game ELF
 	// binary).
-}
-
-u32 cdvdGetElfCRC(const std::string& path)
-{
-	try
-	{
-		// Yay for write-after-read here. Isn't our ELF parser great....
-		const s64 host_size = FileSystem::GetPathFileSize(path.c_str());
-		if (host_size <= 0)
-			return 0;
-
-		std::unique_ptr<ElfObject> elfptr(std::make_unique<ElfObject>(path, static_cast<u32>(std::max<s64>(host_size, 0)), false));
-		elfptr->loadHeaders();
-		return elfptr->getCRC();
-	}
-	catch ([[maybe_unused]] Exception::FileNotFound& e)
-	{
-		return 0;
-	}
 }
 
 static std::string ExecutablePathToSerial(const std::string& path)

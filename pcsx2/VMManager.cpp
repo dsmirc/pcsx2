@@ -392,7 +392,12 @@ std::string VMManager::GetGameSettingsPath(const std::string_view& game_serial, 
 std::string VMManager::GetDiscOverrideFromGameSettings(const std::string& elf_path)
 {
 	std::string iso_path;
-	if (const u32 crc = cdvdGetElfCRC(elf_path); crc != 0)
+	ElfObject elfo;
+	if (!elfo.openFile(elf_path, false, nullptr))
+		return iso_path;
+
+	const u32 crc = elfo.getCRC();
+	if (crc != 0)
 	{
 		INISettingsInterface si(GetGameSettingsPath(std::string_view(), crc));
 		if (si.Load())
