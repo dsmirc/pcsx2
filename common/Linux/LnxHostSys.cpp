@@ -26,10 +26,10 @@
 #include "fmt/core.h"
 
 #include "common/Align.h"
-#include "common/PageFaultSource.h"
 #include "common/Assertions.h"
 #include "common/Console.h"
 #include "common/Exceptions.h"
+#include "common/General.h"
 
 // Apple uses the MAP_ANON define instead of MAP_ANONYMOUS, but they mean
 // the same thing.
@@ -48,7 +48,6 @@
 
 static std::recursive_mutex s_exception_handler_mutex;
 static PageFaultHandler s_exception_handler_callback;
-static void* s_exception_handler_handle;
 static bool s_in_exception_handler;
 
 #if defined(__APPLE__)
@@ -56,6 +55,32 @@ static struct sigaction s_old_sigbus_action;
 #else
 static struct sigaction s_old_sigsegv_action;
 #endif
+
+static void SysPageFaultSignalFilter(int signal, siginfo_t* siginfo, void* ctx);
+
+static void CallExistingSignalHandler(int signal, siginfo_t* siginfo, void* ctx)
+{
+#if !defined(__APPLE__)
+	const struct sigaction& sa = s_old_sigsegv_action;
+#else
+	const struct sigaction& sa = (signal == SIGBUS) ? s_old_sigbus_action : s_old_sigsegv_action;
+#endif
+
+	if (sa.sa_flags & SA_SIGINFO)
+	{
+		sa.sa_sigaction(signal, siginfo, ctx);
+	}
+	else if (sa.sa_handler == SIG_DFL)
+	{
+		// Re-raising the signal would just queue it, and since we'd restore the handler back to us,
+		// we'd end up right back here again. So just abort, because that's probably what it'd do anyway.
+		abort();
+	}
+	else if (sa.sa_handler != SIG_IGN)
+	{
+		sa.sa_handler(signal);
+	}
+}
 
 // Linux implementation of SIGSEGV handler.  Bind it using sigaction().
 static void SysPageFaultSignalFilter(int signal, siginfo_t* siginfo, void* ctx)
@@ -65,7 +90,10 @@ static void SysPageFaultSignalFilter(int signal, siginfo_t* siginfo, void* ctx)
 
 	// Prevent recursive exception filtering.
 	if (s_in_exception_handler)
-		return EXCEPTION_CONTINUE_SEARCH;
+	{
+		CallExistingSignalHandler(signal, siginfo, ctx);
+		return;
+	}
 
 	// Note: Use of stdio functions isn't safe here.  Avoid console logs, assertions, file logs,
 	// or just about anything else useful. However, that's really only a concern if the signal
@@ -93,41 +121,14 @@ static void SysPageFaultSignalFilter(int signal, siginfo_t* siginfo, void* ctx)
 		return;
 
 	// Call old signal handler, which will likely dump core.
-#ifndef __aarch64__
-	const struct sigaction& sa = s_old_sigsegv_action;
-#else
-	const struct sigaction& sa = (signal == SIGBUS) ? s_old_sigbus_action : s_old_sigsegv_action;
-#endif
-
-	if (sa.sa_flags & SA_SIGINFO)
-	{
-		sa.sa_sigaction(signal, siginfo, ctx);
-	}
-	else if (sa.sa_handler == SIG_DFL)
-	{
-		struct sigaction sa;
-		sigemptyset(&sa.sa_mask);
-		sa.sa_flags = SA_SIGINFO;
-		sa.sa_sigaction = SysPageFaultSignalFilter;
-		::signal(signal, SIG_DFL);
-		raise(signal);
-		sigaction(signal, &sa, &sa);
-	}
-	else if (sa.sa_handler == SIG_IGN)
-	{
-		return;
-	}
-	else
-	{
-		sa.sa_handler(signal);
-	}
+	CallExistingSignalHandler(signal, siginfo, ctx);
 }
 
 bool HostSys::InstallPageFaultHandler(PageFaultHandler handler)
 {
 	std::unique_lock lock(s_exception_handler_mutex);
 	pxAssertRel(!s_exception_handler_callback, "A page fault handler is already registered.");
-	if (!s_exception_handler_handle)
+	if (!s_exception_handler_callback)
 	{
 		struct sigaction sa;
 
