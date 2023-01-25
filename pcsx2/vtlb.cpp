@@ -469,7 +469,7 @@ static __ri void vtlb_Miss(u32 addr, u32 mode)
 	}
 
 	const std::string message(fmt::format("TLB Miss, addr=0x{:x} [{}]", addr, mode ? "store" : "load"));
-	if constexpr (IsDevBuild)
+	if (EmuConfig.Cpu.Recompiler.PauseOnTLBMiss)
 	{
 		// Pause, let the user try to figure out what went wrong in the debugger.
 		Host::ReportErrorAsync("R5900 Exception", message);
@@ -479,7 +479,7 @@ static __ri void vtlb_Miss(u32 addr, u32 mode)
 	}
 
 	static int spamStop = 0;
-	if (spamStop++ < 50)
+	if (spamStop++ < 50 || IsDevBuild)
 		Console.Error(message);
 }
 
@@ -489,7 +489,7 @@ static __ri void vtlb_Miss(u32 addr, u32 mode)
 static __ri void vtlb_BusError(u32 addr, u32 mode)
 {
 	const std::string message(fmt::format("Bus Error, addr=0x{:x} [{}]", addr, mode ? "store" : "load"));
-	if constexpr (IsDevBuild)
+	if (EmuConfig.Cpu.Recompiler.PauseOnTLBMiss)
 	{
 		// Pause, let the user try to figure out what went wrong in the debugger.
 		Host::ReportErrorAsync("R5900 Exception", message);
