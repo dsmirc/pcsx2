@@ -827,7 +827,7 @@ void recLQC2()
 	}
 
 	int xmmreg;
-	if (GPR_IS_CONST1(_Rs_))
+	if (GPR_IS_CONST1(_Rs_) && !CHECK_FULLTLB)
 	{
 		const u32 addr = (g_cpuConstRegs[_Rs_].UL[0] + _Imm_) & ~0xFu;
 		xmmreg = vtlb_DynGenReadQuad_Const(128, addr, alloc_cb);
@@ -863,7 +863,7 @@ void recSQC2()
 	if (!_Rt_)
 		xMOVAPS(xRegisterSSE(ftreg), ptr128[&vu0Regs.VF[0].F]);
 
-	if (GPR_IS_CONST1(_Rs_))
+	if (GPR_IS_CONST1(_Rs_) && !CHECK_FULLTLB)
 	{
 		const u32 addr = (g_cpuConstRegs[_Rs_].UL[0] + _Imm_) & ~0xFu;
 		vtlb_DynGenWrite_Const(128, true, addr, ftreg);

@@ -412,8 +412,8 @@ extern uint dmacInterrupt();
 
 extern void cpuReset();		// can throw Exception::FileNotFound.
 extern void cpuException(u32 code, u32 bd);
-extern void cpuTlbMissR(u32 addr, u32 bd);
-extern void cpuTlbMissW(u32 addr, u32 bd);
+extern void cpuTlbMiss(u32 addr, u32 excode);
+extern void cpuBusError(u32 addr, bool store);
 extern void cpuTestHwInts();
 extern void cpuClearInt(uint n);
 extern void GoemonPreloadTlb();
@@ -440,21 +440,22 @@ int isBreakpointNeeded(u32 addr);
 
 #define EXC_CODE(x)     ((x)<<2)
 
-#define EXC_CODE_Int    EXC_CODE(0)
-#define EXC_CODE_Mod    EXC_CODE(1)     /* TLB Modification exception */
-#define EXC_CODE_TLBL   EXC_CODE(2)     /* TLB Miss exception (load or instruction fetch) */
-#define EXC_CODE_TLBS   EXC_CODE(3)     /* TLB Miss exception (store) */
-#define EXC_CODE_AdEL   EXC_CODE(4)
-#define EXC_CODE_AdES   EXC_CODE(5)
-#define EXC_CODE_IBE    EXC_CODE(6)
-#define EXC_CODE_DBE    EXC_CODE(7)
-#define EXC_CODE_Sys    EXC_CODE(8)
-#define EXC_CODE_Bp     EXC_CODE(9)
-#define EXC_CODE_Ri     EXC_CODE(10)
-#define EXC_CODE_CpU    EXC_CODE(11)
-#define EXC_CODE_Ov     EXC_CODE(12)
-#define EXC_CODE_Tr     EXC_CODE(13)
-#define EXC_CODE_FPE    EXC_CODE(15)
-#define EXC_CODE_WATCH  EXC_CODE(23)
-#define EXC_CODE__MASK  0x0000007c
-#define EXC_CODE__SHIFT 2
+#define EXC_CODE_Int         EXC_CODE(0)
+#define EXC_CODE_Mod         EXC_CODE(1)     /* TLB Modification exception */
+#define EXC_CODE_TLBL        EXC_CODE(2)     /* TLB Miss exception (load or instruction fetch) */
+#define EXC_CODE_TLBS        EXC_CODE(3)     /* TLB Miss exception (store) */
+#define EXC_CODE_AdEL        EXC_CODE(4)
+#define EXC_CODE_AdES        EXC_CODE(5)
+#define EXC_CODE_IBE         EXC_CODE(6)
+#define EXC_CODE_DBE         EXC_CODE(7)
+#define EXC_CODE_Sys         EXC_CODE(8)
+#define EXC_CODE_Bp          EXC_CODE(9)
+#define EXC_CODE_Ri          EXC_CODE(10)
+#define EXC_CODE_CpU         EXC_CODE(11)
+#define EXC_CODE_Ov          EXC_CODE(12)
+#define EXC_CODE_Tr          EXC_CODE(13)
+#define EXC_CODE_FPE         EXC_CODE(15)
+#define EXC_CODE_WATCH       EXC_CODE(23)
+#define EXC_CODE__MASK       0x0000007c
+#define EXC_CODE__SHIFT      2
+#define EXC_CODE_TLB_INVALID 0x00010000      /* Causes a TLB invalid exception instead of TLB refill. */

@@ -137,7 +137,7 @@ __ri void cpuException(u32 code, u32 bd)
 		errLevel2 = false;
 		checkStatus = (cpuRegs.CP0.n.Status.b.BEV == 0); //  for TLB/general exceptions
 
-		if (((code & 0x7C) >= 0x8) && ((code & 0x7C) <= 0xC))
+		if (((code & 0x1007C) >= 0x8) && ((code & 0x1007C) <= 0xC))
 			offset = 0x0; //TLB Refill
 		else if ((code & 0x7C) == 0x0)
 			offset = 0x200; //Interrupt
@@ -196,12 +196,17 @@ __ri void cpuException(u32 code, u32 bd)
 	cpuUpdateOperationMode();
 }
 
-void cpuTlbMiss(u32 addr, u32 bd, u32 excode)
+void cpuTlbMiss(u32 addr, u32 excode)
 {
+	// back up PC to where the exception actually occurred
+	cpuRegs.pc -= 4;
+
 	// Avoid too much spamming on the interpreter
-	if (Cpu != &intCpu || IsDebugBuild) {
-		Console.Error("cpuTlbMiss pc:%x, cycl:%x, addr: %x, status=%x, code=%x",
-				cpuRegs.pc, cpuRegs.cycle, addr, cpuRegs.CP0.n.Status.val, excode);
+	if (Cpu != &intCpu || IsDebugBuild)
+	{
+		Console.Error("cpuTlbMiss [%s] pc:%x, cycl:%x, addr: %x, status=%x, code=%x",
+			(excode & EXC_CODE_TLB_INVALID) ? "invalid" : "refill",
+			cpuRegs.pc, cpuRegs.cycle, addr, cpuRegs.CP0.n.Status.val, excode);
 	}
 
 	cpuRegs.CP0.n.BadVAddr = addr;
@@ -209,16 +214,20 @@ void cpuTlbMiss(u32 addr, u32 bd, u32 excode)
 	cpuRegs.CP0.n.Context |= (addr >> 9) & 0x007FFFF0;
 	cpuRegs.CP0.n.EntryHi = (addr & 0xFFFFE000) | (cpuRegs.CP0.n.EntryHi & 0x1FFF);
 
+	cpuException(excode, cpuRegs.branch);
+}
+
+void cpuBusError(u32 addr, bool store)
+{
+	// back up PC to where the exception actually occurred
 	cpuRegs.pc -= 4;
-	cpuException(excode, bd);
-}
 
-void cpuTlbMissR(u32 addr, u32 bd) {
-	cpuTlbMiss(addr, bd, EXC_CODE_TLBL);
-}
+	cpuRegs.CP0.n.BadVAddr = addr;
+	cpuRegs.CP0.n.Context &= 0xFF80000F;
+	cpuRegs.CP0.n.Context |= (addr >> 9) & 0x007FFFF0;
+	cpuRegs.CP0.n.EntryHi = (addr & 0xFFFFE000) | (cpuRegs.CP0.n.EntryHi & 0x1FFF);
 
-void cpuTlbMissW(u32 addr, u32 bd) {
-	cpuTlbMiss(addr, bd, EXC_CODE_TLBS);
+	cpuException(EXC_CODE_DBE, cpuRegs.branch);
 }
 
 // sets a branch test to occur some time from an arbitrary starting point.

@@ -134,9 +134,9 @@ bool mVUIsReservedCOP2(int hostreg);
 
 #define XMMTYPE_TEMP   0 // has to be 0
 #define XMMTYPE_GPRREG X86TYPE_GPR
-#define XMMTYPE_FPREG  6
-#define XMMTYPE_FPACC  7
-#define XMMTYPE_VFREG  8
+#define XMMTYPE_FPREG  2
+#define XMMTYPE_FPACC  3
+#define XMMTYPE_VFREG  4
 
 // lo and hi regs
 #define XMMGPR_LO  33

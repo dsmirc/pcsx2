@@ -68,6 +68,11 @@ static vtlbHandler DefaultPhyHandler;
 static vtlbHandler UnmappedVirtHandler;
 static vtlbHandler UnmappedPhyHandler;
 
+// Only used in full-TLB mode, raises the appropriate exceptions.
+static vtlbHandler TlbRefillHandler;
+static vtlbHandler TlbInvalidHandler;
+static vtlbHandler TlbModifiedHandler;
+
 struct FastmemVirtualMapping
 {
 	u32 offset;
@@ -408,8 +413,8 @@ void GoemonPreloadTlb()
 			if (vmv.isHandler(vaddr) && vmv.assumeHandlerGetID() == 0)
 			{
 				DevCon.WriteLn("GoemonPreloadTlb: Entry %d. Key %x. From V:0x%8.8x to P:0x%8.8x (%d pages)", i, tlb[i].key, vaddr, paddr, size >> VTLB_PAGE_BITS);
-				vtlb_VMap(vaddr, paddr, size);
-				vtlb_VMap(0x20000000 | vaddr, paddr, size);
+				vtlb_VMap(vaddr, paddr, size, true);
+				vtlb_VMap(0x20000000 | vaddr, paddr, size, true);
 			}
 		}
 	}
@@ -456,10 +461,7 @@ static __ri void vtlb_Miss(u32 addr, u32 mode)
 	// Hack to handle expected tlb miss by some games.
 	if (Cpu == &intCpu)
 	{
-		if (mode)
-			cpuTlbMissW(addr, cpuRegs.branch);
-		else
-			cpuTlbMissR(addr, cpuRegs.branch);
+		cpuTlbMiss(addr, mode ? EXC_CODE_TLBS : EXC_CODE_TLBL);
 
 		// Exception handled. Current instruction need to be stopped
 		Cpu->CancelInstruction();
@@ -579,6 +581,51 @@ static void TAKES_R128 vtlbDefaultPhyWrite128(u32 addr, r128 data)
 	pxFailDev(fmt::format("(VTLB) Attempted write128 to unmapped physical address @ 0x{:08X}.", addr).c_str());
 }
 
+static mem8_t vtlbReadOnlyPhyRead8(u32 addr)
+{
+	const VTLBPhysical& real = vtlbdata.pmap[addr >> VTLB_PAGE_BITS];
+	if (real.isHandler())
+		pxFailRel("Fixme");
+
+	return *reinterpret_cast<const mem8_t*>(real.assumePtr() + (addr & VTLB_PAGE_MASK));
+}
+
+static mem16_t vtlbReadOnlyPhyRead16(u32 addr)
+{
+	const VTLBPhysical& real = vtlbdata.pmap[addr >> VTLB_PAGE_BITS];
+	if (real.isHandler())
+		pxFailRel("Fixme");
+
+	return *reinterpret_cast<const mem16_t*>(real.assumePtr() + (addr & VTLB_PAGE_MASK));
+}
+
+static mem32_t vtlbReadOnlyPhyRead32(u32 addr)
+{
+	const VTLBPhysical& real = vtlbdata.pmap[addr >> VTLB_PAGE_BITS];
+	if (real.isHandler())
+		pxFailRel("Fixme");
+
+	return *reinterpret_cast<const mem32_t*>(real.assumePtr() + (addr & VTLB_PAGE_MASK));
+}
+
+static mem64_t vtlbReadOnlyPhyRead64(u32 addr)
+{
+	const VTLBPhysical& real = vtlbdata.pmap[addr >> VTLB_PAGE_BITS];
+	if (real.isHandler())
+		pxFailRel("Fixme");
+
+	return *reinterpret_cast<const mem64_t*>(real.assumePtr() + (addr & VTLB_PAGE_MASK));
+}
+
+static RETURNS_R128 vtlbReadOnlyPhyRead128(u32 addr)
+{
+	const VTLBPhysical& real = vtlbdata.pmap[addr >> VTLB_PAGE_BITS];
+	if (real.isHandler())
+		pxFailRel("Fixme");
+
+	return r128_load(reinterpret_cast<const void*>(real.assumePtr() + (addr & VTLB_PAGE_MASK)));
+}
+
 // ===========================================================================================
 //  VTLB Public API -- Init/Term/RegisterHandler stuff
 // ===========================================================================================
@@ -608,6 +655,34 @@ __ri void vtlb_ReassignHandler(vtlbHandler rv,
 	vtlbdata.RWFT[2][1][rv] = (void*)((w32 != 0) ? w32 : vtlbDefaultPhyWrite32);
 	vtlbdata.RWFT[3][1][rv] = (void*)((w64 != 0) ? w64 : vtlbDefaultPhyWrite64);
 	vtlbdata.RWFT[4][1][rv] = (void*)((w128 != 0) ? w128 : vtlbDefaultPhyWrite128);
+}
+
+__ri void vtlb_ReassignHandler(vtlbHandler rv, const void* read_func, const void* write_func)
+{
+	pxAssume(rv < VTLB_HANDLER_ITEMS);
+
+	vtlbdata.RWFT[0][0][rv] = read_func ? (void*)read_func : (void*)vtlbDefaultPhyRead8;
+	vtlbdata.RWFT[1][0][rv] = read_func ? (void*)read_func : (void*)vtlbDefaultPhyRead16;
+	vtlbdata.RWFT[2][0][rv] = read_func ? (void*)read_func : (void*)vtlbDefaultPhyRead32;
+	vtlbdata.RWFT[3][0][rv] = read_func ? (void*)read_func : (void*)vtlbDefaultPhyRead64;
+	vtlbdata.RWFT[4][0][rv] = read_func ? (void*)read_func : (void*)vtlbDefaultPhyRead128;
+
+	vtlbdata.RWFT[0][1][rv] = write_func ? (void*)write_func : (void*)vtlbDefaultPhyWrite8;
+	vtlbdata.RWFT[1][1][rv] = write_func ? (void*)write_func : (void*)vtlbDefaultPhyWrite16;
+	vtlbdata.RWFT[2][1][rv] = write_func ? (void*)write_func : (void*)vtlbDefaultPhyWrite32;
+	vtlbdata.RWFT[3][1][rv] = write_func ? (void*)write_func : (void*)vtlbDefaultPhyWrite64;
+	vtlbdata.RWFT[4][1][rv] = write_func ? (void*)write_func : (void*)vtlbDefaultPhyWrite128;
+}
+
+void vtlb_SetExceptionHandlers(
+	const void* tlb_refill_read, const void* tlb_refill_write,
+	const void* tlb_invalid_read, const void* tlb_invalid_write,
+	const void* tlb_modified, const void* bus_error)
+{
+	vtlb_ReassignHandler(TlbRefillHandler, tlb_refill_read, tlb_refill_write);
+	vtlb_ReassignHandler(TlbInvalidHandler, tlb_invalid_read, tlb_invalid_write);
+	vtlb_ReassignHandler(TlbModifiedHandler, tlb_modified, tlb_modified);
+	// TODO: Bus Error
 }
 
 vtlbHandler vtlb_NewHandler()
@@ -1055,7 +1130,7 @@ bool vtlb_IsFaultingPC(u32 guest_pc)
 
 //virtual mappings
 //TODO: Add invalid paddr checks
-void vtlb_VMap(u32 vaddr, u32 paddr, u32 size)
+void vtlb_VMap(u32 vaddr, u32 paddr, u32 size, bool writable)
 {
 	verify(0 == (vaddr & VTLB_PAGE_MASK));
 	verify(0 == (paddr & VTLB_PAGE_MASK));
@@ -1086,7 +1161,17 @@ void vtlb_VMap(u32 vaddr, u32 paddr, u32 size)
 		else
 			vmv = VTLBVirtual(vtlbdata.pmap[paddr >> VTLB_PAGE_BITS], paddr, vaddr);
 
-		vtlbdata.vmap[vaddr >> VTLB_PAGE_BITS] = vmv;
+		const u32 vidx = (vaddr >> VTLB_PAGE_BITS);
+		vtlbdata.vmap[vidx] = vmv;
+
+		if (CHECK_FULLTLB)
+		{
+			if (!writable)
+				vtlbdata.vmap_write[vidx] = VTLBVirtual(VTLBPhysical::fromHandler(TlbModifiedHandler), paddr, vaddr);
+			else
+				vtlbdata.vmap_write[vidx] = vmv;
+		}
+
 		if (vtlbdata.ppmap)
 		{
 			if (!(vaddr & 0x80000000)) // those address are already physical don't change them
@@ -1123,11 +1208,58 @@ void vtlb_VMapBuffer(u32 vaddr, void* buffer, u32 size)
 	uptr bu8 = (uptr)buffer;
 	while (size > 0)
 	{
-		vtlbdata.vmap[vaddr >> VTLB_PAGE_BITS] = VTLBVirtual::fromPointer(bu8, vaddr);
+		const u32 vidx = vaddr >> VTLB_PAGE_BITS;
+		vtlbdata.vmap[vidx] = VTLBVirtual::fromPointer(bu8, vaddr);
+		if (CHECK_FULLTLB)
+			vtlbdata.vmap_write[vidx] = vtlbdata.vmap[vidx];
+
 		vaddr += VTLB_PAGE_SIZE;
 		bu8 += VTLB_PAGE_SIZE;
 		size -= VTLB_PAGE_SIZE;
 	}
+}
+
+void vtlb_VMapInvalid(u32 vaddr, u32 size)
+{
+	verify(0 == (vaddr & VTLB_PAGE_MASK));
+	verify(0 == (size & VTLB_PAGE_MASK) && size > 0);
+
+	vtlb_RemoveFastmemMappings(vaddr, size);
+
+	const VTLBPhysical phys(VTLBPhysical::fromHandler(CHECK_FULLTLB ? TlbInvalidHandler : UnmappedVirtHandler));
+
+	while (size > 0)
+	{
+		const u32 vidx = vaddr >> VTLB_PAGE_BITS;
+		vtlbdata.vmap[vidx] = VTLBVirtual(phys, vaddr, vaddr);
+		if (CHECK_FULLTLB)
+			vtlbdata.vmap_write[vidx] = vtlbdata.vmap[vidx];
+
+		vaddr += VTLB_PAGE_SIZE;
+		size -= VTLB_PAGE_SIZE;
+	}
+}
+
+bool vtlb_VMapIsMapped(u32 vaddr)
+{
+	verify(0 == (vaddr & VTLB_PAGE_MASK));
+
+	const u32 vidx = vaddr >> VTLB_PAGE_BITS;
+	const VTLBVirtual& ent = vtlbdata.vmap[vidx];
+	if (!ent.isHandler(vaddr))
+		return true;
+	
+	const vtlbHandler id = ent.assumeHandlerGetID();
+	return (id != UnmappedVirtHandler && id != TlbRefillHandler && id != TlbModifiedHandler);
+}
+
+bool vtlb_VMapIsInvalid(u32 vaddr)
+{
+	verify(0 == (vaddr & VTLB_PAGE_MASK));
+
+	const u32 vidx = vaddr >> VTLB_PAGE_BITS;
+	const VTLBVirtual& ent = vtlbdata.vmap[vidx];
+	return (ent.isHandler(vaddr) && ent.assumeHandlerGetID() == TlbInvalidHandler);
 }
 
 void vtlb_VMapUnmap(u32 vaddr, u32 size)
@@ -1137,13 +1269,26 @@ void vtlb_VMapUnmap(u32 vaddr, u32 size)
 
 	vtlb_RemoveFastmemMappings(vaddr, size);
 
+	const VTLBPhysical phys(VTLBPhysical::fromHandler(CHECK_FULLTLB ? TlbRefillHandler : UnmappedVirtHandler));
+
 	while (size > 0)
 	{
-		vtlbdata.vmap[vaddr >> VTLB_PAGE_BITS] = VTLBVirtual(VTLBPhysical::fromHandler(UnmappedVirtHandler), vaddr, vaddr);
+		const u32 vidx = vaddr >> VTLB_PAGE_BITS;
+		vtlbdata.vmap[vidx] = VTLBVirtual(phys, vaddr, vaddr);
+		if (CHECK_FULLTLB)
+			vtlbdata.vmap_write[vidx] = vtlbdata.vmap[vidx];
+
 		vaddr += VTLB_PAGE_SIZE;
 		size -= VTLB_PAGE_SIZE;
 	}
 }
+
+extern void (*recTlbRefillRHandler)();
+extern void (*recTlbRefillWHandler)();
+extern void (*recTlbInvalidRHandler)();
+extern void (*recTlbInvalidWHandler)();
+extern void (*recTlbModifiedHandler)();
+extern void (*recBusErrorHandler)();
 
 // vtlb_Init -- Clears vtlb handlers and memory mappings.
 void vtlb_Init()
@@ -1165,7 +1310,12 @@ void vtlb_Init()
 
 	UnmappedVirtHandler = vtlb_RegisterHandler(VTLB_BuildUnmappedHandler(vtlbUnmappedV));
 	UnmappedPhyHandler = vtlb_RegisterHandler(VTLB_BuildUnmappedHandler(vtlbUnmappedP));
-	DefaultPhyHandler = vtlb_RegisterHandler(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+	DefaultPhyHandler = vtlb_RegisterHandler(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+
+	// Will get populated by the CPU.
+	TlbRefillHandler = vtlb_RegisterHandler(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+	TlbInvalidHandler = vtlb_RegisterHandler(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
+	TlbModifiedHandler = vtlb_RegisterHandler(nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr);
 
 	//done !
 
@@ -1183,6 +1333,24 @@ void vtlb_Init()
 
 	extern void vtlb_dynarec_init();
 	vtlb_dynarec_init();
+}
+
+u32 vtlb_GetFetchExceptionCode(u32 mem)
+{
+	const auto vmv = vtlbdata.vmap[mem >> VTLB_PAGE_BITS];
+	if (!vmv.isHandler(mem))
+		return 0;
+
+	const vtlbHandler id = vmv.assumeHandlerGetID();
+	if (id == TlbRefillHandler)
+		return EXC_CODE_TLBL;
+	else if (id == TlbInvalidHandler)
+		return EXC_CODE_TLBL | EXC_CODE_TLB_INVALID;
+	else if (id == UnmappedPhyHandler)
+		return EXC_CODE_DBE;
+	
+	// Not a known handler, this won't work when reading/compiling..
+	return 0;
 }
 
 // vtlb_Reset -- Performs a COP0-level reset of the PS2's TLB.
@@ -1255,6 +1423,23 @@ bool vtlb_Core_Alloc()
 	{
 		HostSys::MemProtect(vmap, VMAP_SIZE, PageProtectionMode().Read().Write());
 		vtlbdata.vmap = vmap;
+	}
+
+	static VTLBVirtual* vmap_write = nullptr;
+	if (!vmap_write)
+	{
+		vmap_write = (VTLBVirtual*)GetVmMemory().BumpAllocator().Alloc(VMAP_SIZE);
+		if (!vmap_write)
+		{
+			Host::ReportErrorAsync("Error", "Failed to allocate vtlb vmap_write");
+			return false;
+		}
+	}
+
+	if (!vtlbdata.vmap_write)
+	{
+		HostSys::MemProtect(vmap_write, VMAP_SIZE, PageProtectionMode().Read().Write());
+		vtlbdata.vmap_write = vmap_write;
 	}
 
 	if (!vtlbdata.fastmem_base)

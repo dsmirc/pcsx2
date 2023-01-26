@@ -82,6 +82,13 @@ void recBranchCall(void (*func)());
 void recCall(void (*func)());
 u32 scaleblockcycles_clear();
 
+void recRegisterExceptionInformation();
+u8* recGenerateDynamicExceptionExit(u32 return_offset, u32 excode);
+
+extern void (*recTlbMissRHandler)();
+extern void (*recTlbMissWHandler)();
+extern void (*recBusErrorHandler)();
+
 namespace R5900
 {
 	namespace Dynarec

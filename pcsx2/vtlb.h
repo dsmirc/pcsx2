@@ -61,14 +61,17 @@ extern void vtlb_ResetFastmem();
 extern vtlbHandler vtlb_NewHandler();
 
 extern vtlbHandler vtlb_RegisterHandler(
-	vtlbMemR8FP* r8,vtlbMemR16FP* r16,vtlbMemR32FP* r32,vtlbMemR64FP* r64,vtlbMemR128FP* r128,
-	vtlbMemW8FP* w8,vtlbMemW16FP* w16,vtlbMemW32FP* w32,vtlbMemW64FP* w64,vtlbMemW128FP* w128
-);
+	vtlbMemR8FP* r8, vtlbMemR16FP* r16, vtlbMemR32FP* r32, vtlbMemR64FP* r64, vtlbMemR128FP* r128,
+	vtlbMemW8FP* w8, vtlbMemW16FP* w16, vtlbMemW32FP* w32, vtlbMemW64FP* w64, vtlbMemW128FP* w128);
 
-extern void vtlb_ReassignHandler( vtlbHandler rv,
-	vtlbMemR8FP* r8,vtlbMemR16FP* r16,vtlbMemR32FP* r32,vtlbMemR64FP* r64,vtlbMemR128FP* r128,
-	vtlbMemW8FP* w8,vtlbMemW16FP* w16,vtlbMemW32FP* w32,vtlbMemW64FP* w64,vtlbMemW128FP* w128
-);
+extern void vtlb_ReassignHandler(vtlbHandler rv,
+	vtlbMemR8FP* r8, vtlbMemR16FP* r16, vtlbMemR32FP* r32, vtlbMemR64FP* r64, vtlbMemR128FP* r128,
+	vtlbMemW8FP* w8, vtlbMemW16FP* w16, vtlbMemW32FP* w32, vtlbMemW64FP* w64, vtlbMemW128FP* w128);
+extern void vtlb_ReassignHandler(vtlbHandler rv, const void* read_func, const void* write_func);
+extern void vtlb_SetExceptionHandlers(
+	const void* tlb_refill_read, const void* tlb_refill_write,
+	const void* tlb_invalid_read, const void* tlb_invalid_write,
+	const void* tlb_modified, const void* bus_error);
 
 
 extern void vtlb_MapHandler(vtlbHandler handler,u32 start,u32 size);
@@ -79,9 +82,12 @@ extern u32  vtlb_V2P(u32 vaddr);
 extern void vtlb_DynV2P();
 
 //virtual mappings
-extern void vtlb_VMap(u32 vaddr,u32 paddr,u32 sz);
+extern void vtlb_VMap(u32 vaddr,u32 paddr,u32 sz,bool writable);
 extern void vtlb_VMapBuffer(u32 vaddr,void* buffer,u32 sz);
 extern void vtlb_VMapUnmap(u32 vaddr,u32 sz);
+extern void vtlb_VMapInvalid(u32 vaddr,u32 sz);
+extern bool vtlb_VMapIsMapped(u32 vaddr);
+extern bool vtlb_VMapIsInvalid(u32 vaddr);
 extern bool vtlb_ResolveFastmemMapping(uptr* addr);
 extern bool vtlb_GetGuestAddress(uptr host_addr, u32* guest_addr);
 extern void vtlb_UpdateFastmemProtection(u32 paddr, u32 size, const PageProtectionMode& prot);
@@ -109,6 +115,9 @@ template <typename DataType>
 extern DataType vtlb_ramRead(u32 mem);
 template <typename DataType>
 extern bool vtlb_ramWrite(u32 mem, const DataType& value);
+
+// Simulating instruction fetch, which exception (if any) would be raised.
+extern u32 vtlb_GetFetchExceptionCode(u32 addr);
 
 using vtlb_ReadRegAllocCallback = int(*)();
 extern int vtlb_DynGenReadNonQuad(u32 bits, bool sign, bool xmm, int addr_reg, vtlb_ReadRegAllocCallback dest_reg_alloc = nullptr);
@@ -260,6 +269,7 @@ namespace vtlb_private
 		VTLBPhysical pmap[VTLB_PMAP_ITEMS]; //512KB // PS2 physical to x86 physical
 
 		VTLBVirtual* vmap;                //4MB (allocated by vtlb_init) // PS2 virtual to x86 physical
+		VTLBVirtual* vmap_write;          //4MB (allocated by vtlb_init), only used in full-tlb mode.
 
 		u32* ppmap;               //4MB (allocated by vtlb_init) // PS2 virtual to PS2 physical
 
@@ -267,8 +277,9 @@ namespace vtlb_private
 
 		MapData()
 		{
-			vmap = NULL;
-			ppmap = NULL;
+			vmap = nullptr;
+			vmap_write = nullptr;
+			ppmap = nullptr;
 			fastmem_base = 0;
 		}
 	};

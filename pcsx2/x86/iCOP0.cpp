@@ -257,6 +257,20 @@ void recMTC0()
 				COP0_LOG("MTC0 Breakpoint debug Registers code = %x\n", cpuRegs.code & 0x3FF);
 				break;
 
+			case 10: // EntryHi
+			{
+				if (CHECK_FULLTLB)
+				{
+					iFlushCall(FLUSH_FULLVTLB);
+					xFastCall(&COP0_WriteEntryHi, g_cpuConstRegs[_Rt_].UL[0]);
+				}
+				else
+				{
+					xMOV(ptr32[&cpuRegs.CP0.r[_Rd_]], g_cpuConstRegs[_Rt_].UL[0]);
+				}
+			}
+			break;
+
 			default:
 				xMOV(ptr32[&cpuRegs.CP0.r[_Rd_]], g_cpuConstRegs[_Rt_].UL[0]);
 				break;
@@ -311,6 +325,21 @@ void recMTC0()
 			case 24:
 				COP0_LOG("MTC0 Breakpoint debug Registers code = %x\n", cpuRegs.code & 0x3FF);
 				break;
+
+			case 10: // EntryHi
+			{
+				if (CHECK_FULLTLB)
+				{
+					_eeMoveGPRtoR(arg1regd, _Rt_);
+					iFlushCall(FLUSH_FULLVTLB);
+					xFastCall(&COP0_WriteEntryHi);
+				}
+				else
+				{
+					_eeMoveGPRtoM((uptr)&cpuRegs.CP0.r[_Rd_], _Rt_);
+				}
+			}
+			break;
 
 			default:
 				_eeMoveGPRtoM((uptr)&cpuRegs.CP0.r[_Rd_], _Rt_);

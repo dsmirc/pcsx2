@@ -194,9 +194,9 @@ void memMapKernelMem()
 	//lower 512 mb: direct map
 	//vtlb_VMap(0x00000000,0x00000000,0x20000000);
 	//0x8* mirror
-	vtlb_VMap(0x80000000, 0x00000000, _1mb*512);
+	vtlb_VMap(0x80000000, 0x00000000, _1mb*512, true);
 	//0xa* mirror
-	vtlb_VMap(0xA0000000, 0x00000000, _1mb*512);
+	vtlb_VMap(0xA0000000, 0x00000000, _1mb*512, true);
 }
 
 //what do do with these ?
@@ -268,7 +268,7 @@ static mem8_t _ext_memRead8 (u32 mem)
 	}
 
 	MEM_LOG("Unknown Memory Read8   from address %8.8x", mem);
-	cpuTlbMissR(mem, cpuRegs.branch);
+	cpuBusError(mem, false);
 	return 0;
 }
 
@@ -298,7 +298,7 @@ static mem16_t _ext_memRead16(u32 mem)
 		default: break;
 	}
 	MEM_LOG("Unknown Memory read16  from address %8.8x", mem);
-	cpuTlbMissR(mem, cpuRegs.branch);
+	cpuBusError(mem, false);
 	return 0;
 }
 
@@ -319,7 +319,7 @@ static mem32_t _ext_memRead32(u32 mem)
 	}
 
 	MEM_LOG("Unknown Memory read32  from address %8.8x (Status=%8.8x)", mem, cpuRegs.CP0.n.Status.val);
-	cpuTlbMissR(mem, cpuRegs.branch);
+	cpuBusError(mem, false);
 	return 0;
 }
 
@@ -334,7 +334,7 @@ static u64 _ext_memRead64(u32 mem)
 	}
 
 	MEM_LOG("Unknown Memory read64  from address %8.8x", mem);
-	cpuTlbMissR(mem, cpuRegs.branch);
+	cpuBusError(mem, false);
 	return 0;
 }
 
@@ -351,7 +351,7 @@ static RETURNS_R128 _ext_memRead128(u32 mem)
 	}
 
 	MEM_LOG("Unknown Memory read128 from address %8.8x", mem);
-	cpuTlbMissR(mem, cpuRegs.branch);
+	cpuBusError(mem, false);
 	return r128_zero();
 }
 
@@ -371,7 +371,7 @@ static void _ext_memWrite8 (u32 mem, mem8_t  value)
 	}
 
 	MEM_LOG("Unknown Memory write8   to  address %x with data %2.2x", mem, value);
-	cpuTlbMissW(mem, cpuRegs.branch);
+	cpuBusError(mem, true);
 }
 
 template<int p>
@@ -392,7 +392,7 @@ static void _ext_memWrite16(u32 mem, mem16_t value)
 		default: break;
 	}
 	MEM_LOG("Unknown Memory write16  to  address %x with data %4.4x", mem, value);
-	cpuTlbMissW(mem, cpuRegs.branch);
+	cpuBusError(mem, true);
 }
 
 template<int p>
@@ -408,7 +408,7 @@ static void _ext_memWrite32(u32 mem, mem32_t value)
 		default: break;
 	}
 	MEM_LOG("Unknown Memory write32  to  address %x with data %8.8x", mem, value);
-	cpuTlbMissW(mem, cpuRegs.branch);
+	cpuBusError(mem, true);
 }
 
 template<int p>
@@ -424,7 +424,7 @@ static void _ext_memWrite64(u32 mem, mem64_t value)
 	}*/
 
 	MEM_LOG("Unknown Memory write64  to  address %x with data %8.8x_%8.8x", mem, (u32)(value>>32), (u32)value);
-	cpuTlbMissW(mem, cpuRegs.branch);
+	cpuBusError(mem, true);
 }
 
 template<int p>
@@ -442,7 +442,7 @@ static void TAKES_R128 _ext_memWrite128(u32 mem, r128 value)
 
 	alignas(16) const u128 uvalue = r128_to_u128(value);
 	MEM_LOG("Unknown Memory write128 to  address %x with data %8.8x_%8.8x_%8.8x_%8.8x", mem, uvalue._u32[3], uvalue._u32[2], uvalue._u32[1], uvalue._u32[0]);
-	cpuTlbMissW(mem, cpuRegs.branch);
+	cpuBusError(mem, true);
 }
 
 #define vtlb_RegisterHandlerTempl1(nam,t) vtlb_RegisterHandler(nam##Read8<t>,nam##Read16<t>,nam##Read32<t>,nam##Read64<t>,nam##Read128<t>, \
@@ -643,27 +643,6 @@ template<int vunum> static void TAKES_R128 vuDataWrite128(u32 addr, r128 data) {
 	r128_store_unaligned(&vu->Mem[addr], data);
 }
 
-
-void memSetPageAddr(u32 vaddr, u32 paddr)
-{
-	//Console.WriteLn("memSetPageAddr: %8.8x -> %8.8x", vaddr, paddr);
-
-	vtlb_VMap(vaddr,paddr,0x1000);
-
-}
-
-void memClearPageAddr(u32 vaddr)
-{
-	//Console.WriteLn("memClearPageAddr: %8.8x", vaddr);
-
-	vtlb_VMapUnmap(vaddr,0x1000); // -> whut ?
-
-#ifdef FULLTLB
-//	memLUTRK[vaddr >> 12] = 0;
-//	memLUTWK[vaddr >> 12] = 0;
-#endif
-}
-
 ///////////////////////////////////////////////////////////////////////////
 // PS2 Memory Init / Reset / Shutdown
 
@@ -838,7 +817,7 @@ void eeMemoryReserve::Reset()
 	memMapUserMem();
 	memSetKernelMode();
 
-	vtlb_VMap(0x00000000,0x00000000,0x20000000);
+	vtlb_VMap(0x00000000,0x00000000,0x20000000,true);
 	vtlb_VMapUnmap(0x20000000,0x60000000);
 
 	const bool needs_bios = !GSDumpReplayer::IsReplayingDump();

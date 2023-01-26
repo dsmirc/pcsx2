@@ -137,7 +137,7 @@ namespace vtlb_private
 	// Prepares eax, ecx, and, ebx for Direct or Indirect operations.
 	// Returns the writeback pointer for ebx (return address from indirect handling)
 	//
-	static void DynGen_PrepRegs(int addr_reg, int value_reg, u32 sz, bool xmm)
+	static void DynGen_PrepRegs(int addr_reg, int value_reg, u32 sz, bool xmm, bool write)
 	{
 		EE::Profiler.EmitMem();
 
@@ -166,9 +166,11 @@ namespace vtlb_private
 			}
 		}
 
+		VTLBVirtual* vmap = (CHECK_FULLTLB && write) ? vtlbdata.vmap_write : vtlbdata.vmap;
+
 		xMOV(eax, arg1regd);
 		xSHR(eax, VTLB_PAGE_BITS);
-		xMOV(rax, ptrNative[xComplexAddress(arg3reg, vtlbdata.vmap, rax * wordsize)]);
+		xMOV(rax, ptrNative[xComplexAddress(arg3reg, vmap, rax * wordsize)]);
 		xADD(arg1reg, rax);
 	}
 
@@ -291,6 +293,7 @@ static void DynGen_HandlerTest(const GenDirectFn& gen_direct, int mode, int bits
 	xForwardJump8 done;
 	to_handler.SetTarget();
 	xFastCall(GetIndirectDispatcherPtr(mode, szidx, sign));
+	recRegisterExceptionInformation();
 	done.SetTarget();
 }
 
@@ -386,6 +389,20 @@ void vtlb_dynarec_init()
 		}
 	}
 
+	if (CHECK_FULLTLB)
+	{
+		xAlignCallTarget();
+
+		const u32 rip_offset = 0x28;
+		const void* tlb_refill_read = CHECK_FULLTLB ? recGenerateDynamicExceptionExit(rip_offset, EXC_CODE_TLBL) : nullptr;
+		const void* tlb_refill_write = CHECK_FULLTLB ? recGenerateDynamicExceptionExit(rip_offset, EXC_CODE_TLBS) : nullptr;
+		const void* tlb_invalid_read = CHECK_FULLTLB ? recGenerateDynamicExceptionExit(rip_offset, EXC_CODE_TLBL | EXC_CODE_TLB_INVALID) : nullptr;
+		const void* tlb_invalid_write = CHECK_FULLTLB ? recGenerateDynamicExceptionExit(rip_offset, EXC_CODE_TLBS | EXC_CODE_TLB_INVALID) : nullptr;
+		const void* tlb_modified = CHECK_FULLTLB ? recGenerateDynamicExceptionExit(rip_offset, EXC_CODE_Mod) : nullptr;
+		const void* bus_error = CHECK_FULLTLB ? recGenerateDynamicExceptionExit(rip_offset, EXC_CODE_DBE) : nullptr;
+		vtlb_SetExceptionHandlers(tlb_refill_read, tlb_refill_write, tlb_invalid_read, tlb_invalid_write, tlb_modified, bus_error);
+	}
+
 	HostSys::MemProtectStatic(m_IndirectDispatchers, PageAccess_ExecOnly());
 
 	Perf::any.map((uptr)m_IndirectDispatchers, __pagesize, "TLB Dispatcher");
@@ -406,7 +423,7 @@ int vtlb_DynGenReadNonQuad(u32 bits, bool sign, bool xmm, int addr_reg, vtlb_Rea
 	{
 		iFlushCall(FLUSH_FULLVTLB);
 
-		DynGen_PrepRegs(addr_reg, -1, bits, xmm);
+		DynGen_PrepRegs(addr_reg, -1, bits, xmm, false);
 		DynGen_HandlerTest([bits, sign]() { DynGen_DirectRead(bits, sign); }, 0, bits, sign && bits < 64);
 
 		if (!xmm)
@@ -594,7 +611,7 @@ int vtlb_DynGenReadQuad(u32 bits, int addr_reg, vtlb_ReadRegAllocCallback dest_r
 	{
 		iFlushCall(FLUSH_FULLVTLB);
 
-		DynGen_PrepRegs(arg1regd.GetId(), -1, bits, true);
+		DynGen_PrepRegs(arg1regd.GetId(), -1, bits, true, false);
 		DynGen_HandlerTest([bits]() {DynGen_DirectRead(bits, false); },  0, bits);
 
 		const int reg = dest_reg_alloc ? dest_reg_alloc() : (_freeXMMreg(0), 0); // Handler returns in xmm0
@@ -719,7 +736,7 @@ void vtlb_DynGenWrite(u32 sz, bool xmm, int addr_reg, int value_reg)
 	{
 		iFlushCall(FLUSH_FULLVTLB);
 
-		DynGen_PrepRegs(addr_reg, value_reg, sz, xmm);
+		DynGen_PrepRegs(addr_reg, value_reg, sz, xmm, false);
 		DynGen_HandlerTest([sz]() { DynGen_DirectWrite(sz); }, 1, sz);
 		return;
 	}
@@ -1016,7 +1033,7 @@ void vtlb_DynBackpatchLoadStore(uptr code_address, u32 code_size, u32 guest_pc, 
 
 	if (is_load)
 	{
-		DynGen_PrepRegs(address_register, -1, size_in_bits, is_xmm);
+		DynGen_PrepRegs(address_register, -1, size_in_bits, is_xmm, false);
 		DynGen_HandlerTest([size_in_bits, is_signed]() {DynGen_DirectRead(size_in_bits, is_signed); },  0, size_in_bits, is_signed && size_in_bits <= 32);
 
 		if (size_in_bits == 128)
@@ -1061,7 +1078,7 @@ void vtlb_DynBackpatchLoadStore(uptr code_address, u32 code_size, u32 guest_pc, 
 			}
 		}
 
-		DynGen_PrepRegs(address_register, data_register, size_in_bits, is_xmm);
+		DynGen_PrepRegs(address_register, data_register, size_in_bits, is_xmm, !is_load);
 		DynGen_HandlerTest([size_in_bits]() { DynGen_DirectWrite(size_in_bits); }, 1, size_in_bits);
 	}
 

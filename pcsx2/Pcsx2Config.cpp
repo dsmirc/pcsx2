@@ -209,6 +209,7 @@ Pcsx2Config::RecompilerOptions::RecompilerOptions()
 	EnableVU0 = true;
 	EnableVU1 = true;
 	EnableFastmem = true;
+	EnableFullTLB = false;
 	PauseOnTLBMiss = false;
 
 	// vu and fpu clamping default to standard overflow.
@@ -287,6 +288,7 @@ void Pcsx2Config::RecompilerOptions::LoadSave(SettingsWrapper& wrap)
 	SettingsWrapBitBool(EnableVU0);
 	SettingsWrapBitBool(EnableVU1);
 	SettingsWrapBitBool(EnableFastmem);
+	SettingsWrapBitBool(EnableFullTLB);
 	SettingsWrapBitBool(PauseOnTLBMiss);
 
 	SettingsWrapBitBool(vu0Overflow);
@@ -1048,7 +1050,7 @@ void Pcsx2Config::GamefixOptions::Set(GamefixId id, bool enabled)
 		case Fix_VIFFIFO:             VIFFIFOHack             = enabled; break;
 		case Fix_VIF1Stall:           VIF1StallHack           = enabled; break;
 		case Fix_GIFFIFO:             GIFFIFOHack             = enabled; break;
-		case Fix_GoemonTlbMiss:       GoemonTlbHack           = enabled; break;
+		case Fix_GoemonTlbMiss:       /*GoemonTlbHack           = enabled; */break;
 		case Fix_Ibit:                IbitHack                = enabled; break;
 		case Fix_VUSync:              VUSyncHack              = enabled; break;
 		case Fix_VUOverflow:          VUOverflowHack          = enabled; break;

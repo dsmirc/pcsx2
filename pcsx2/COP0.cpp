@@ -237,81 +237,211 @@ __fi void COP0_UpdatePCCR()
 
 void MapTLB(const tlbs& t, int i)
 {
-	u32 mask, addr;
-	u32 saddr, eaddr;
-
-	COP0_LOG("MAP TLB %d: 0x%08X-> [0x%08X 0x%08X] S=%d G=%d ASID=%d Mask=0x%03X EntryLo0 PFN=%x EntryLo0 Cache=%x EntryLo1 PFN=%x EntryLo1 Cache=%x VPN2=%x",
-		i, t.VPN2, t.PFN0, t.PFN1, t.S >> 31, t.G, t.ASID,
+#if 1
+	Console.WriteLn("MAP TLB %d %x %x: 0x%08X-> [0x%08X 0x%08X] S=%d G=%d ASID=%d Mask=0x%03X EntryLo0 PFN=%x EntryLo0 Cache=%x EntryLo1 PFN=%x EntryLo1 Cache=%x VPN2=%x",
+		i, t.EntryLo0, t.EntryLo1, t.VPN2, t.PFN0, t.PFN1, t.S >> 31, t.G, t.ASID,
 		t.Mask, t.EntryLo0 >> 6, (t.EntryLo0 & 0x38) >> 3, t.EntryLo1 >> 6, (t.EntryLo1 & 0x38) >> 3, t.VPN2);
+#endif
 
 	if (t.S)
 	{
 		vtlb_VMapBuffer(t.VPN2, eeMem->Scratch, Ps2MemSize::Scratch);
+		return;
 	}
 
-	if (t.VPN2 == 0x70000000) return; //uh uhh right ...
-	if (t.EntryLo0 & 0x2) {
-		mask  = ((~t.Mask) << 1) & 0xfffff;
-		saddr = t.VPN2 >> 12;
-		eaddr = saddr + t.Mask + 1;
+	const u32 ASID = (cpuRegs.CP0.n.EntryHi & 0xFF);
+	if (!t.G && t.ASID != ASID)
+	{
+		Console.Warning("incorrect asid!");
+		return;
+	}
 
-		for (addr=saddr; addr<eaddr; addr++) {
-			if ((addr & mask) == ((t.VPN2 >> 12) & mask)) { //match
-				memSetPageAddr(addr << 12, t.PFN0 + ((addr - saddr) << 12));
-				Cpu->Clear(addr << 12, 0x400);
+	const bool valid0 = (t.EntryLo0 & 0x2);
+	if (valid0 || CHECK_FULLTLB)
+	{
+		const u32 mask = ((~t.Mask) << 1) & 0xfffff;
+		const u32 saddr = t.VPN2 >> 12;
+		const u32 eaddr = saddr + t.Mask + 1;
+		const u32 writable = (t.EntryLo0 & 0x4) != 0;
+
+		for (u32 addr = saddr; addr < eaddr; addr++)
+		{
+			if ((addr & mask) == ((t.VPN2 >> 12) & mask))//match
+			{
+				const u32 vaddr = (addr << 12);
+				const u32 size = 0x1000;
+
+				// don't overwrite good mappings with invalid
+				if (!valid0 && vtlb_VMapIsMapped(vaddr))
+					continue;
+
+				if (!valid0)
+				{
+					vtlb_VMapInvalid(vaddr, size);
+				}
+				else
+				{
+					const u32 paddr = t.PFN0 + ((addr - saddr) << 12);
+					vtlb_VMap(vaddr, paddr, size, writable);
+				}
+
+				Cpu->Clear(vaddr, size / 4);
 			}
 		}
 	}
 
-	if (t.EntryLo1 & 0x2) {
-		mask  = ((~t.Mask) << 1) & 0xfffff;
-		saddr = (t.VPN2 >> 12) + t.Mask + 1;
-		eaddr = saddr + t.Mask + 1;
+	const bool valid1 = t.EntryLo1 & 0x2;
+	if (valid1 || CHECK_FULLTLB)
+	{
+		const u32 mask = ((~t.Mask) << 1) & 0xfffff;
+		const u32 saddr = (t.VPN2 >> 12) + t.Mask + 1;
+		const u32 eaddr = saddr + t.Mask + 1;
+		const u32 writable = (t.EntryLo1 & 0x4) != 0;
 
-		for (addr=saddr; addr<eaddr; addr++) {
-			if ((addr & mask) == ((t.VPN2 >> 12) & mask)) { //match
-				memSetPageAddr(addr << 12, t.PFN1 + ((addr - saddr) << 12));
-				Cpu->Clear(addr << 12, 0x400);
+		for (u32 addr = saddr; addr < eaddr; addr++)
+		{
+			if ((addr & mask) == ((t.VPN2 >> 12) & mask)) //match
+			{
+				const u32 vaddr = (addr << 12);
+				const u32 size = 0x1000;
+
+				// don't overwrite good mappings with invalid
+				if (!valid1 && vtlb_VMapIsMapped(vaddr))
+					continue;
+
+				if (!valid1)
+				{
+					vtlb_VMapInvalid(vaddr, size);
+				}
+				else
+				{
+					const u32 paddr = t.PFN1 + ((addr - saddr) << 12);
+					vtlb_VMap(vaddr, paddr, size, writable);
+				}
+
+				Cpu->Clear(vaddr, size / 4);
 			}
 		}
 	}
 }
 
+void RemapAllTLBs()
+{
+	for (u32 i = 0; i < std::size(tlb); i++)
+	{
+		UnmapTLB(tlb[i], i);
+		MapTLB(tlb[i], i);
+	}
+}
+
+void COP0_WriteEntryHi(u32 value)
+{
+	const u32 old_ASID = (cpuRegs.CP0.n.EntryHi & 0xFF);
+	const u32 new_ASID = (value & 0xFF);
+	cpuRegs.CP0.n.EntryHi = value;
+	if (old_ASID == new_ASID)
+		return;
+
+	Console.WriteLn(Color_StrongYellow, "ASID change: %u -> %u", old_ASID, new_ASID);
+
+	for (u32 i = 0; i < std::size(tlb); i++)
+	{
+		if (tlb[i].G)
+			continue;
+
+		if (tlb[i].ASID == old_ASID)
+		{
+			Console.WriteLn("  unmapping TLB %u", i);
+			UnmapTLB(tlb[i], i);
+		}
+		else if (tlb[i].ASID == new_ASID)
+		{
+			Console.WriteLn("  mapping TLB %u", i);
+			MapTLB(tlb[i], i);
+		}
+	}
+}
+
+bool LookupTLB(u32 addr, bool* valid)
+{
+	for (u32 i = 0; i < std::size(tlb); i++)
+	{
+		const tlbs& t = tlb[i];
+		const u32 mask = ((~t.Mask) << 1) & 0xfffff;
+
+		const u32 saddr0 = (t.VPN2 >> 12) << 12;
+		const u32 eaddr0 = saddr0 + mask + 1;
+		if (addr >= saddr0 && addr < eaddr0)
+		{
+			*valid = (t.EntryLo0 & 0x2) != 0;
+			return true;
+		}
+
+		const u32 saddr1 = ((t.VPN2 >> 12) << 12) + t.Mask + 1;
+		const u32 eaddr1 = saddr1 + t.Mask + 1;
+		if (addr >= saddr1 && addr < eaddr1)
+		{
+			*valid = (t.EntryLo1 & 0x2) != 0;
+			return true;
+		}
+	}
+
+	return false;
+}
+
 void UnmapTLB(const tlbs& t, int i)
 {
 	//Console.WriteLn("Clear TLB %d: %08x-> [%08x %08x] S=%d G=%d ASID=%d Mask= %03X", i,t.VPN2,t.PFN0,t.PFN1,t.S,t.G,t.ASID,t.Mask);
-	u32 mask, addr;
-	u32 saddr, eaddr;
-
 	if (t.S)
 	{
 		vtlb_VMapUnmap(t.VPN2,0x4000);
 		return;
 	}
 
-	if (t.EntryLo0 & 0x2)
+	const bool valid0 = (t.EntryLo0 & 0x2);
+	if (valid0 || CHECK_FULLTLB)
 	{
-		mask  = ((~t.Mask) << 1) & 0xfffff;
-		saddr = t.VPN2 >> 12;
-		eaddr = saddr + t.Mask + 1;
-	//	Console.WriteLn("Clear TLB: %08x ~ %08x",saddr,eaddr-1);
-		for (addr=saddr; addr<eaddr; addr++) {
-			if ((addr & mask) == ((t.VPN2 >> 12) & mask)) { //match
-				memClearPageAddr(addr << 12);
-				Cpu->Clear(addr << 12, 0x400);
+		const u32 mask = ((~t.Mask) << 1) & 0xfffff;
+		const u32 saddr = t.VPN2 >> 12;
+		const u32 eaddr = saddr + t.Mask + 1;
+		//	Console.WriteLn("Clear TLB: %08x ~ %08x",saddr,eaddr-1);
+		for (u32 addr = saddr; addr < eaddr; addr++)
+		{
+			if ((addr & mask) == ((t.VPN2 >> 12) & mask))//match
+			{
+				const u32 vaddr = (addr << 12);
+				const u32 size = 0x1000;
+
+				// only unmap if it was invalid mapped
+				if (valid0 || vtlb_VMapIsInvalid(vaddr))
+				{
+					vtlb_VMapUnmap(vaddr, size);
+					Cpu->Clear(vaddr, size / 4);
+				}
 			}
 		}
 	}
 
-	if (t.EntryLo1 & 0x2) {
-		mask  = ((~t.Mask) << 1) & 0xfffff;
-		saddr = (t.VPN2 >> 12) + t.Mask + 1;
-		eaddr = saddr + t.Mask + 1;
-	//	Console.WriteLn("Clear TLB: %08x ~ %08x",saddr,eaddr-1);
-		for (addr=saddr; addr<eaddr; addr++) {
-			if ((addr & mask) == ((t.VPN2 >> 12) & mask)) { //match
-				memClearPageAddr(addr << 12);
-				Cpu->Clear(addr << 12, 0x400);
+	const bool valid1 = t.EntryLo1 & 0x2;
+	if (valid1 || CHECK_FULLTLB)
+	{
+		const u32 mask = ((~t.Mask) << 1) & 0xfffff;
+		const u32 saddr = (t.VPN2 >> 12) + t.Mask + 1;
+		const u32 eaddr = saddr + t.Mask + 1;
+		//	Console.WriteLn("Clear TLB: %08x ~ %08x",saddr,eaddr-1);
+		for (u32 addr = saddr; addr < eaddr; addr++)
+		{
+			if ((addr & mask) == ((t.VPN2 >> 12) & mask))//match
+			{
+				const u32 vaddr = (addr << 12);
+				const u32 size = 0x1000;
+
+				// only unmap if it was invalid mapped
+				if (valid1 || vtlb_VMapIsInvalid(vaddr))
+				{
+					vtlb_VMapUnmap(vaddr, size);
+					Cpu->Clear(vaddr, size / 4);
+				}
 			}
 		}
 	}
@@ -327,7 +457,7 @@ void WriteTLB(int i)
 	tlb[i].Mask = (cpuRegs.CP0.n.PageMask >> 13) & 0xfff;
 	tlb[i].nMask = (~tlb[i].Mask) & 0xfff;
 	tlb[i].VPN2 = ((cpuRegs.CP0.n.EntryHi >> 13) & (~tlb[i].Mask)) << 13;
-	tlb[i].ASID = cpuRegs.CP0.n.EntryHi & 0xfff;
+	tlb[i].ASID = cpuRegs.CP0.n.EntryHi & 0xff;
 	tlb[i].G = cpuRegs.CP0.n.EntryLo0 & cpuRegs.CP0.n.EntryLo1 & 0x1;
 	tlb[i].PFN0 = (((cpuRegs.CP0.n.EntryLo0 >> 6) & 0xFFFFF) & (~tlb[i].Mask)) << 12;
 	tlb[i].PFN1 = (((cpuRegs.CP0.n.EntryLo1 >> 6) & 0xFFFFF) & (~tlb[i].Mask)) << 12;

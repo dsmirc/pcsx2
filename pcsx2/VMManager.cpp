@@ -32,6 +32,7 @@
 
 #include "Achievements.h"
 #include "Counters.h"
+#include "COP0.h"
 #include "CDVD/CDVD.h"
 #include "DEV9/DEV9.h"
 #include "Elfheader.h"
@@ -1666,6 +1667,9 @@ void VMManager::CheckForCPUConfigChanges(const Pcsx2Config& old_config)
 
 	if (EmuConfig.Cpu.Recompiler.EnableFastmem != old_config.Cpu.Recompiler.EnableFastmem)
 		vtlb_ResetFastmem();
+
+	if (EmuConfig.Cpu.Recompiler.EnableFullTLB != old_config.Cpu.Recompiler.EnableFullTLB)
+		RemapAllTLBs();
 
 	// did we toggle recompilers?
 	if (EmuConfig.Cpu.CpusChanged(old_config.Cpu))

@@ -538,6 +538,8 @@ struct Pcsx2Config
 		bool
 			EnableFastmem : 1;
 		bool
+			EnableFullTLB : 1;
+		bool
 			PauseOnTLBMiss : 1;
 		BITFIELD_END
 
@@ -1348,6 +1350,7 @@ namespace EmuFolders
 #define CHECK_CACHE (EmuConfig.Cpu.Recompiler.EnableEECache)
 #define CHECK_IOPREC (EmuConfig.Cpu.Recompiler.EnableIOP)
 #define CHECK_FASTMEM (EmuConfig.Cpu.Recompiler.EnableEE && EmuConfig.Cpu.Recompiler.EnableFastmem)
+#define CHECK_FULLTLB (EmuConfig.Cpu.Recompiler.EnableFullTLB)
 
 //------------ SPECIAL GAME FIXES!!! ---------------
 #define CHECK_VUADDSUBHACK (EmuConfig.Gamefixes.VuAddSubHack) // Special Fix for Tri-ace games, they use an encryption algorithm that requires VU addi opcode to be bit-accurate.

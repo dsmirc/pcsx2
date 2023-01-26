@@ -30,10 +30,13 @@
 #include "GS.h"
 #include "CDVD/CDVD.h"
 #include "Elfheader.h"
+#include "Host.h"
+#include "COP0.h"
 
 #include "DebugTools/Breakpoints.h"
 #include "Patch.h"
 
+#include "common/Align.h"
 #include "common/AlignedMalloc.h"
 #include "common/FastJmp.h"
 #include "common/MemsetFast.inl"
@@ -41,6 +44,9 @@
 
 // Only for MOVQ workaround.
 #include "common/emitter/internal.h"
+
+#include <unordered_map>
+#include "fmt/format.h"
 
 //#define DUMP_BLOCKS 1
 //#define TRACE_BLOCKS 1
@@ -120,6 +126,25 @@ static void iBranchTest(u32 newpc = 0xffffffff);
 static void ClearRecLUT(BASEBLOCK* base, int count);
 static u32 scaleblockcycles();
 static void recExitExecution();
+
+struct RecExceptionInfo
+{
+	struct RegInfo
+	{
+		u8 reg : 5;
+		u8 type : 3;
+	};
+
+	u32 mips_pc;
+	u32 mips_code;
+	bool mips_delay_slot;
+	RegInfo gpr_info[iREGCNT_GPR];
+	RegInfo xmm_info[iREGCNT_XMM];
+
+	// TODO: Make this suck less.
+	std::vector<std::pair<u32, u64>> constant_values;
+};
+static std::unordered_map<const void*, RecExceptionInfo> s_rec_exception_info;
 
 #ifdef TRACE_BLOCKS
 static void pauseAAA()
@@ -370,14 +395,14 @@ alignas(__pagesize) static u8 eeRecDispatchers[__pagesize];
 
 typedef void DynGenFunc();
 
-static DynGenFunc* DispatcherEvent = NULL;
-static DynGenFunc* DispatcherReg = NULL;
-static DynGenFunc* JITCompile = NULL;
-static DynGenFunc* JITCompileInBlock = NULL;
-static DynGenFunc* EnterRecompiledCode = NULL;
-static DynGenFunc* ExitRecompiledCode = NULL;
-static DynGenFunc* DispatchBlockDiscard = NULL;
-static DynGenFunc* DispatchPageReset = NULL;
+static DynGenFunc* DispatcherEvent = nullptr;
+static DynGenFunc* DispatcherReg = nullptr;
+static DynGenFunc* JITCompile = nullptr;
+static DynGenFunc* JITCompileInBlock = nullptr;
+static DynGenFunc* EnterRecompiledCode = nullptr;
+static DynGenFunc* ExitRecompiledCode = nullptr;
+static DynGenFunc* DispatchBlockDiscard = nullptr;
+static DynGenFunc* DispatchPageReset = nullptr;
 
 static void recEventTest()
 {
@@ -394,7 +419,7 @@ static void recEventTest()
 // dispatches to the recompiled block address.
 static DynGenFunc* _DynGen_JITCompile()
 {
-	pxAssertMsg(DispatcherReg != NULL, "Please compile the DispatcherReg subroutine *before* JITComple.  Thanks.");
+	pxAssertMsg(DispatcherReg != nullptr, "Please compile the DispatcherReg subroutine *before* JITComple.  Thanks.");
 
 	u8* retval = xGetAlignedCallTarget();
 
@@ -449,7 +474,7 @@ static DynGenFunc* _DynGen_DispatcherEvent()
 
 static DynGenFunc* _DynGen_EnterRecompiledCode()
 {
-	pxAssertDev(DispatcherReg != NULL, "Dynamically generated dispatchers are required prior to generating EnterRecompiledCode!");
+	pxAssertDev(DispatcherReg != nullptr, "Dynamically generated dispatchers are required prior to generating EnterRecompiledCode!");
 
 	u8* retval = xGetAlignedCallTarget();
 
@@ -510,7 +535,7 @@ static void _DynGen_Dispatchers()
 	EnterRecompiledCode = _DynGen_EnterRecompiledCode();
 	DispatchBlockDiscard = _DynGen_DispatchBlockDiscard();
 	DispatchPageReset = _DynGen_DispatchPageReset();
-
+	
 	HostSys::MemProtectStatic(eeRecDispatchers, PageAccess_ExecOnly());
 
 	recBlocks.SetJITCompile(JITCompile);
@@ -637,6 +662,7 @@ static void recResetRaw()
 		memset(s_pInstCache, 0, sizeof(EEINST) * s_nInstCacheSize);
 
 	recBlocks.Reset();
+	s_rec_exception_info.clear();
 	mmap_ResetBlockTracking();
 	vtlb_ClearLoadStoreInfo();
 
@@ -656,6 +682,9 @@ static void recShutdown()
 	safe_aligned_free(recLutReserve_RAM);
 
 	recBlocks.Reset();
+	s_rec_exception_info.clear();
+	mmap_ResetBlockTracking();
+	vtlb_ClearLoadStoreInfo();
 
 	recRAM = recROM = recROM1 = recROM2 = NULL;
 
@@ -2153,6 +2182,18 @@ bool skipMPEG_By_Pattern(u32 sPC)
 
 static void recRecompile(const u32 startpc)
 {
+	if (CHECK_FULLTLB)
+	{
+		if (const u32 excode = vtlb_GetFetchExceptionCode(startpc); excode > 0)
+		{
+			Console.WriteLn("TLB miss while fetching code at %08X", startpc);
+			cpuRegs.pc = startpc + 4;
+			cpuRegs.branch = false;
+			cpuTlbMiss(startpc, excode);
+			return;
+		}
+	}
+
 	u32 i = 0;
 	u32 willbranch3 = 0;
 
@@ -2272,13 +2313,6 @@ static void recRecompile(const u32 startpc)
 	{
 		BASEBLOCK* pblock = PC_GETBLOCK(i);
 
-		// stop before breakpoints
-		if (isBreakpointNeeded(i) != 0 || isMemcheckNeeded(i) != 0)
-		{
-			s_nEndBlock = i;
-			break;
-		}
-
 		if (i != startpc) // Block size truncation checks.
 		{
 			if ((i & 0xffc) == 0x0) // breaks blocks at 4k page boundaries
@@ -2296,6 +2330,13 @@ static void recRecompile(const u32 startpc)
 				s_nEndBlock = i;
 				break;
 			}
+		}
+
+		// stop before breakpoints
+		if (isBreakpointNeeded(i) != 0 || isMemcheckNeeded(i) != 0)
+		{
+			s_nEndBlock = i;
+			break;
 		}
 
 		//HUH ? PSM ? whut ? THIS IS VIRTUAL ACCESS GOD DAMMIT
@@ -2677,6 +2718,237 @@ StartRecomp:
 
 	s_pCurBlock = NULL;
 	s_pCurBlockEx = NULL;
+}
+
+void recRegisterExceptionInformation()
+{
+	const void* const rip = xGetPtr();
+
+	RecExceptionInfo ei;
+	ei.mips_pc = g_recompilingDelaySlot ? (pc) : (pc - 4);
+	ei.mips_code = cpuRegs.code;
+	ei.mips_delay_slot = g_recompilingDelaySlot;
+
+	for (u32 gpr = 0; gpr < iREGCNT_GPR; gpr++)
+	{
+		const u8 type = x86regs[gpr].type;
+		const s8 reg = x86regs[gpr].reg;
+		if ((type != X86TYPE_GPR && type != X86TYPE_FPRC && type != X86TYPE_VIREG) ||
+			(type == X86TYPE_GPR && reg <= 0))
+		{
+			ei.gpr_info[gpr] = {};
+			continue;
+		}
+
+		ei.gpr_info[gpr].type = type;
+		ei.gpr_info[gpr].reg = static_cast<u8>(reg);
+	}
+
+	for (u32 xmmi = 0; xmmi < iREGCNT_XMM; xmmi++)
+	{
+		const u8 type = xmmregs[xmmi].type;
+		const s8 reg = xmmregs[xmmi].reg;
+		if ((type != XMMTYPE_GPRREG && type != XMMTYPE_FPREG && type != XMMTYPE_FPACC && type != XMMTYPE_VFREG) ||
+			((type == XMMTYPE_GPRREG || type == XMMTYPE_VFREG) && reg <= 0))
+		{
+			ei.xmm_info[xmmi] = {};
+			continue;
+		}
+
+		ei.xmm_info[xmmi].type = type;
+		ei.xmm_info[xmmi].reg = static_cast<u8>(reg);
+	}
+
+	for (u32 reg = 1; reg < 32; reg++)
+	{
+		// Skip constants which are in registers, we handled them above.
+		if (!GPR_IS_CONST1(reg) || _checkX86reg(X86TYPE_GPR, reg, 0) >= 0)
+			continue;
+
+		ei.constant_values.emplace_back(reg, g_cpuConstRegs[reg].UD[0]);
+	}
+
+	s_rec_exception_info.emplace(rip, std::move(ei));
+}
+
+static void recDoExceptionExit(void* rip, const u64* gprs, const u128* xmms, u32 excode)
+{
+	const auto it = s_rec_exception_info.find(rip);
+	if (it == s_rec_exception_info.end())
+	{
+		Host::ReportErrorAsync("R5900 Internal Error", fmt::format("Exception information for {} not found.", rip));
+		VMManager::SetState(VMState::Paused);
+		recExitExecution();
+		return;
+		//__debugbreak();
+
+	}
+
+	const RecExceptionInfo& ei = it->second;
+	//Console.WriteLn("--- Exception Exit ---");
+	//Console.WriteLn("MIPS PC: 0x%08x%s", ei.mips_pc - 4, ei.mips_delay_slot ? " (delay slot)" : "");
+
+	// Flush GPRs.
+	for (u32 gpr = 0; gpr < iREGCNT_GPR; gpr++)
+	{
+		const u8 reg = ei.gpr_info[gpr].reg;
+		const u8 type = ei.gpr_info[gpr].type;
+		const u64 value = gprs[gpr];
+		switch (type)
+		{
+		case X86TYPE_GPR:
+			//Console.WriteLn("Host GPR %u -> MIPS 64 GPR %u", gpr, reg);
+			cpuRegs.GPR.r[reg].UD[0] = gprs[gpr];
+			break;
+
+		case X86TYPE_FPRC:
+			//Console.WriteLn("Host GPR %u -> MIPS FPRC %u", gpr, reg);
+			fpuRegs.fprc[reg] = static_cast<u32>(gprs[gpr]);
+			break;
+
+		case X86TYPE_VIREG:
+			//Console.WriteLn("Host GPR %u -> VI %u", gpr, reg);
+			VU0.VI[reg].US[0] = static_cast<u16>(gprs[gpr]);
+			break;
+
+		default:
+			//Console.WriteLn("Host GPR %u -> unallocated", gpr);
+			break;
+		}
+	}
+
+	// Flush FPRs.
+	for (u32 xmmi = 0; xmmi < iREGCNT_XMM; xmmi++)
+	{
+		const u8 reg = ei.xmm_info[xmmi].reg;
+		const u8 type = ei.xmm_info[xmmi].type;
+		const u128& value = xmms[xmmi];
+		switch (type)
+		{
+		case XMMTYPE_GPRREG:
+			//Console.WriteLn("Host XMM %u -> MIPS 128 GPR %u", xmmi, reg);
+			cpuRegs.GPR.r[reg].UQ = value;
+			break;
+
+		case XMMTYPE_FPREG:
+			//Console.WriteLn("Host XMM %u -> MIPS FPR %u", xmmi, reg);
+			fpuRegs.fpr[reg].UL = value._u32[0];
+			break;
+
+		case XMMTYPE_FPACC:
+			//Console.WriteLn("Host XMM %u -> MIPS ACC", xmmi);
+			fpuRegs.ACC.UL = value._u32[0];
+			break;
+
+		case XMMTYPE_VFREG:
+			{
+				if (reg == 33)
+				{
+					//Console.WriteLn("Host XMM %u -> VU0 I", xmmi);
+					VU0.VI[REG_I].UL = value._u32[0];
+				}
+				else if (reg == 32)
+				{
+					//Console.WriteLn("Host XMM %u -> VU0 ACC", xmmi);
+					VU0.ACC.UQ = value;
+				}
+				else
+				{
+					pxAssert(reg > 0);
+					//Console.WriteLn("Host XMM %u -> VU0 VF %u", xmmi, reg);
+					VU0.VF[reg].UQ = value;
+				}
+			}
+			break;
+
+		default:
+			//Console.WriteLn("Host XMM %u -> unallocated", xmmi);
+			break;
+		}
+	}
+
+	for (const auto& it : ei.constant_values)
+	{
+		//Console.WriteLn("Constant GPR %u - 0x%llx", it.first, it.second);
+		cpuRegs.GPR.r[it.first].UD[0] = it.second;
+	}
+
+	if ((excode & ~EXC_CODE_TLB_INVALID) == EXC_CODE_TLBL ||
+		(excode & ~EXC_CODE_TLB_INVALID) == EXC_CODE_TLBS ||
+		excode == EXC_CODE_Mod ||
+		excode == EXC_CODE_DBE)
+	{
+		// Compute the load/store address from the instruction.
+		const u32 rs = ((ei.mips_code >> 21) & 0x1F);
+		const s32 disp = static_cast<s16>(ei.mips_code);
+		const u32 addr = cpuRegs.GPR.r[rs].UL[0] + static_cast<u32>(disp);
+		Console.WriteLn("Rec TLB miss at %08X (addr %08X)", ei.mips_pc, addr);
+		cpuRegs.pc = ei.mips_pc + 4;
+		cpuRegs.branch = ei.mips_delay_slot;
+		if (excode != EXC_CODE_DBE)
+			cpuTlbMiss(addr, excode);
+		else
+			cpuBusError(addr, excode);
+	}
+	else
+	{
+		// Actually raise the exception (changes PC again).
+		cpuRegs.pc = ei.mips_pc;
+		cpuException(excode, ei.mips_delay_slot);
+	}
+
+	// Bail out of the rec, our stack's a mess.
+	recExitExecution();
+}
+
+u8* recGenerateDynamicExceptionExit(u32 return_offset, u32 excode)
+{
+	u8* retval = xGetPtr();
+
+#ifdef _WIN32
+	constexpr u32 shadow_size = 32;
+#else
+	constexpr u32 shadow_size = 0;
+#endif
+
+	// We're going to save all registers here, both because we're calling out to C,
+	// and because we're going to index them when we're flushing the state back.
+	// We assume this is a call from a slowmem handler, which means the stack won't
+	// be aligned at entry to this code.
+
+	constexpr u32 gpr_size = iREGCNT_GPR * 8;
+	constexpr u32 xmm_size = iREGCNT_XMM * 16;
+	constexpr u32 stack_size = gpr_size + xmm_size + shadow_size + 16;
+	constexpr s32 base = shadow_size + 8;
+
+	// Allocate stack space. Also aligns the stack pointer.
+	xSUB(rsp, stack_size);
+
+	// Save GPRs.
+	for (u32 gpr = 0; gpr < iREGCNT_GPR; gpr++)
+	{
+		if (static_cast<int>(gpr) == rsp.GetId())
+			continue;
+
+		xMOV(ptr64[rsp + (base + static_cast<s32>(gpr * 8))], xRegister64(gpr));
+	}
+
+	// Save XMMs.
+	for (u32 xmmi = 0; xmmi < iREGCNT_XMM; xmmi++)
+	{
+		xMOVAPS(ptr128[rsp + (base + static_cast<s32>(gpr_size + (xmmi * 16)))], xRegisterSSE(xmmi));
+	}
+
+	// Grab the return address, and fill in parameters to C callback.
+	xMOV(arg1reg, ptr64[rsp + (stack_size + 8 + return_offset)]);
+	xLEA(arg2reg, ptr64[rsp + base]);
+	xLEA(arg3reg, ptr64[rsp + (base + static_cast<s32>(gpr_size))]);
+	xMOV(xRegister32(arg4reg.GetId()), excode);
+
+	// May as well just do a jump here, since we'll be bailing out of the rec anyway.
+	xJMP(reinterpret_cast<void*>(&recDoExceptionExit));
+
+	return retval;
 }
 
 R5900cpu recCpu = {
