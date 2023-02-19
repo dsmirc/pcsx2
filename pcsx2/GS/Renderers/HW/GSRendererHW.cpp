@@ -2096,6 +2096,7 @@ void GSRendererHW::HandleTextureHazards(const TextureMinMaxResult& tmm)
 		copy_range.z, copy_range.w, copy_range.width(), copy_range.height());
 
 	m_src_copy = g_gs_device->CreateTexture(copy_size.x, copy_size.y, 1, src->GetFormat(), true);
+	m_src_copy->SetScale(src->GetScale());
 	g_gs_device->CopyRect(src, m_src_copy, copy_range, copy_range.x, copy_range.y);
 	m_conf.tex = m_src_copy;
 }

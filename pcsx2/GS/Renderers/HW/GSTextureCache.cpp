@@ -715,6 +715,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 			calcRescale(dst->m_texture);
 			GSTexture* tex = type == RenderTarget ? g_gs_device->CreateRenderTarget(new_size.x, new_size.y, GSTexture::Format::Color, clear) :
 													g_gs_device->CreateDepthStencil(new_size.x, new_size.y, GSTexture::Format::DepthStencil, clear);
+			g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 			g_gs_device->StretchRect(dst->m_texture, sRect, tex, dRect, (type == RenderTarget) ? ShaderConvert::COPY : ShaderConvert::DEPTH_COPY, false);
 			m_target_memory_usage = (m_target_memory_usage - dst->m_texture->GetMemUsage()) + tex->GetMemUsage();
 			g_gs_device->Recycle(dst->m_texture);
@@ -769,6 +770,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 				GL_CACHE("TC: Lookup Target(Color) %dx%d, hit Depth (0x%x, TBW %d, %s was %s)", new_size.x, new_size.y, bp, TEX0.TBW, psm_str(TEX0.PSM), psm_str(dst_match->m_TEX0.PSM));
 				shader = (fmt_16_bits) ? ShaderConvert::FLOAT16_TO_RGB5A1 : ShaderConvert::FLOAT32_TO_RGBA8;
 			}
+			g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 			g_gs_device->StretchRect(dst_match->m_texture, sRect, dst->m_texture, dRect, shader, false);
 		}
 	}
@@ -889,6 +891,7 @@ void GSTextureCache::ScaleTargetForDisplay(Target* t, const GIFRegTEX0& dispfb, 
 		t->m_texture->GetHeight(), t->m_TEX0.TBP0, real_h, dispfb.TBP0, y_offset, needed_height);
 
 	// Fill the new texture with the old data, and discard the old texture.
+	g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 	g_gs_device->StretchRect(old_texture, new_texture, GSVector4(old_texture->GetSize()).zwxy(), ShaderConvert::COPY, false);
 	m_target_memory_usage = (m_target_memory_usage - old_texture->GetMemUsage()) + new_texture->GetMemUsage();
 	g_gs_device->Recycle(old_texture);
@@ -2334,6 +2337,7 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 			else if (is_8bits)
 			{
 				g_gs_device->ConvertToIndexedTexture(sTex, x_offset, y_offset, std::max<u32>(dst->m_TEX0.TBW, 1u) * 64, dst->m_TEX0.PSM, dTex, std::max<u32>(TEX0.TBW, 1u) * 64, TEX0.PSM);
+				g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 			}
 			else
 			{
@@ -2342,6 +2346,7 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 				sRectF.w /= sTex->GetHeight();
 
 				g_gs_device->StretchRect(sTex, sRectF, dTex, GSVector4(destX, destY, w, h), shader, false);
+				g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 			}
 
 			src->m_texture = dTex;
@@ -2724,6 +2729,7 @@ void GSTextureCache::Read(Target* t, const GSVector4i& r)
 		GSTexture* tmp = g_gs_device->CreateRenderTarget(drc.z, drc.w, fmt, false);
 		if (tmp)
 		{
+			g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 			g_gs_device->StretchRect(t->m_texture, src, tmp, GSVector4(drc), ps_shader, false);
 			dltex->get()->CopyFromTexture(drc, tmp, drc, 0, true);
 			g_gs_device->Recycle(tmp);
@@ -3329,6 +3335,7 @@ bool GSTextureCache::Target::ResizeTexture(int new_width, int new_height, GSVect
 		{
 			// Can't do partial copies in DirectX for depth textures, and it's probably not ideal in other
 			// APIs either. So use a fullscreen quad setting depth instead.
+			g_perfmon.Put(GSPerfMon::TextureCopies, 1);
 			g_gs_device->StretchRect(m_texture, tex, GSVector4(rc), ShaderConvert::DEPTH_COPY, false);
 		}
 		else
