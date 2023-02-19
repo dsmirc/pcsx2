@@ -128,6 +128,9 @@ bool GSHwHack::GSC_Manhunt2(GSRendererHW& r, const GSFrameInfo& fi, int& skip)
 
 bool GSHwHack::GSC_CrashBandicootWoC(GSRendererHW& r, const GSFrameInfo& fi, int& skip)
 {
+	if (s_nativeres)
+		return false;
+
 	// Channel effect not properly supported - Removes fog to fix the fog wall issue on Direct3D at any resolution, and while upscaling on every Hardware renderer.
 	if (skip == 0)
 	{
@@ -1020,7 +1023,9 @@ bool GSHwHack::OI_RozenMaidenGebetGarden(GSRendererHW& r, GSTexture* rt, GSTextu
 			TEX0.TBW = RCONTEXT->FRAME.FBW;
 			TEX0.PSM = RCONTEXT->FRAME.PSM;
 
-			if (GSTextureCache::Target* tmp_rt = r.m_tc->LookupTarget(TEX0, r.GetTargetSize(), GSTextureCache::RenderTarget, true))
+			if (GSTextureCache::Target* tmp_rt = r.m_tc->LookupTarget(TEX0,
+					r.GetTextureCache()->GetTargetSize(TEX0, GSTextureCache::RenderTarget, GSVector4i(1, 1)),
+					r.GetTextureScaleFactor(), GSTextureCache::RenderTarget, true))
 			{
 				GL_INS("OI_RozenMaidenGebetGarden FB clear");
 				g_gs_device->ClearRenderTarget(tmp_rt->m_texture, 0);
@@ -1038,7 +1043,9 @@ bool GSHwHack::OI_RozenMaidenGebetGarden(GSRendererHW& r, GSTexture* rt, GSTextu
 			TEX0.TBW = RCONTEXT->FRAME.FBW;
 			TEX0.PSM = RCONTEXT->ZBUF.PSM;
 
-			if (GSTextureCache::Target* tmp_ds = r.m_tc->LookupTarget(TEX0, r.GetTargetSize(), GSTextureCache::DepthStencil, true))
+			if (GSTextureCache::Target* tmp_ds = r.m_tc->LookupTarget(TEX0,
+					r.GetTextureCache()->GetTargetSize(TEX0, GSTextureCache::DepthStencil, GSVector4i(1, 1)),
+					r.GetTextureScaleFactor(), GSTextureCache::DepthStencil, true))
 			{
 				GL_INS("OI_RozenMaidenGebetGarden ZB clear");
 				g_gs_device->ClearDepth(tmp_ds->m_texture);
@@ -1071,7 +1078,7 @@ bool GSHwHack::OI_SonicUnleashed(GSRendererHW& r, GSTexture* rt, GSTexture* ds, 
 
 	GL_INS("OI_SonicUnleashed replace draw by a copy");
 
-	GSTextureCache::Target* src = r.m_tc->LookupTarget(Texture, GSVector2i(1, 1), GSTextureCache::RenderTarget, true);
+	GSTextureCache::Target* src = r.m_tc->LookupTarget(Texture, GSVector2i(1, 1), r.GetTextureScaleFactor(), GSTextureCache::RenderTarget, true);
 
 	const GSVector2i rt_size(rt->GetSize());
 	const GSVector2i src_size(src->m_texture->GetSize());
@@ -1162,7 +1169,9 @@ bool GSHwHack::GSC_Battlefield2(GSRendererHW& r, const GSFrameInfo& fi, int& ski
 			GIFRegTEX0 TEX0 = {};
 			TEX0.TBP0 = fi.FBP;
 			TEX0.TBW = 8;
-			GSTextureCache::Target* dst = r.m_tc->LookupTarget(TEX0, GSRendererHW::GetInstance()->GetTargetSize(), GSTextureCache::DepthStencil, true);
+			GSTextureCache::Target* dst = r.m_tc->LookupTarget(TEX0,
+				r.GetTextureCache()->GetTargetSize(TEX0, GSTextureCache::DepthStencil, GSVector4i(1, 1)),
+				r.GetTextureScaleFactor(), GSTextureCache::DepthStencil, true);
 			if (dst)
 			{
 				g_gs_device->ClearDepth(dst->m_texture);

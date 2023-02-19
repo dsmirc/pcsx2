@@ -234,6 +234,10 @@ void ps_convert_rgb5a1_float16_biln()
 #endif
 
 #ifdef ps_convert_rgba_8i
+uniform uint SBW;
+uniform uint DBW;
+uniform float ScaleFactor;
+
 void ps_convert_rgba_8i()
 {
     // Convert a RGBA texture into a 8 bits packed texture
@@ -252,16 +256,22 @@ void ps_convert_rgba_8i()
     uvec2 subblock = pos & uvec2(7u, 1u);
     uvec2 coord = block | subblock;
 
+    // Compensate for potentially differing page pitch.
+	uvec2 block_xy = coord / uvec2(64u, 32u);
+	uint block_num = (block_xy.y * (DBW / 128u)) + block_xy.x;
+	uvec2 block_offset = uvec2((block_num % (SBW / 64u)) * 64u, (block_num / (SBW / 64u)) * 32u);
+	coord = (coord % uvec2(64u, 32u)) + block_offset;
+
     // Apply offset to cols 1 and 2
     uint is_col23 = pos.y & 4u;
     uint is_col13 = pos.y & 2u;
     uint is_col12 = is_col23 ^ (is_col13 << 1);
     coord.x ^= is_col12; // If cols 1 or 2, flip bit 3 of x
 
-    if (floor(PS_SCALE_FACTOR) != PS_SCALE_FACTOR)
-        coord = uvec2(vec2(coord) * PS_SCALE_FACTOR);
+    if (floor(ScaleFactor) != ScaleFactor)
+        coord = uvec2(vec2(coord) * ScaleFactor);
     else
-        coord *= uvec2(PS_SCALE_FACTOR);
+        coord *= uvec2(ScaleFactor);
 
     vec4 pixel = texelFetch(TextureSampler, ivec2(coord), 0);
     vec2  sel0 = (pos.y & 2u) == 0u ? pixel.rb : pixel.ga;

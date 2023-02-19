@@ -58,6 +58,12 @@ public:
 		Invalidated
 	};
 
+	union alignas(16) ClearValue
+	{
+		float color[4];
+		float depth;
+	};
+
 protected:
 	GSVector2 m_scale;
 	GSVector2i m_size;
@@ -66,6 +72,7 @@ protected:
 	Format m_format;
 	State m_state;
 	bool m_needs_mipmaps_generated;
+	ClearValue m_clear_value = {};
 
 public:
 	GSTexture();
@@ -82,12 +89,12 @@ public:
 	virtual void Swap(GSTexture* tex);
 	virtual u32 GetID() { return 0; }
 
-	GSVector2 GetScale() const { return m_scale; }
+	const GSVector2& GetScale() const { return m_scale; }
 	void SetScale(const GSVector2& scale) { m_scale = scale; }
 
 	int GetWidth() const { return m_size.x; }
 	int GetHeight() const { return m_size.y; }
-	GSVector2i GetSize() const { return m_size; }
+	const GSVector2i& GetSize() const { return m_size; }
 	int GetMipmapLevels() const { return m_mipmap_levels; }
 	bool IsMipmap() const { return m_mipmap_levels > 1; }
 
@@ -120,6 +127,20 @@ public:
 
 	State GetState() const { return m_state; }
 	void SetState(State state) { m_state = state; }
+
+	__fi GSVector4 GetClearColor() const { return GSVector4::load<false>(m_clear_value.color); }
+	__fi float GetClearDepth() const { return m_clear_value.depth; }
+
+	__fi void SetClearColor(const GSVector4& color)
+	{
+		m_state = State::Cleared;
+		GSVector4::store<false>(m_clear_value.color, color);
+	}
+	__fi void SetClearDepth(float depth)
+	{
+		m_state = State::Cleared;
+		m_clear_value.depth = depth;
+	}
 
 	void GenerateMipmapsIfNeeded();
 	void ClearMipmapGenerationFlag() { m_needs_mipmaps_generated = false; }

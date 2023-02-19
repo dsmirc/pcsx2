@@ -468,11 +468,33 @@ void GSDevice12::UpdateCLUTTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, GS
 		u32 offsetX, offsetY, dOffset;
 		u32 pad2;
 	};
+
 	const Uniforms cb = {sTex->GetScale().x, sTex->GetScale().y, {0.0f, 0.0f}, offsetX, offsetY, dOffset};
+	SetUtilityRootSignature();
 	SetUtilityPushConstants(&cb, sizeof(cb));
 
 	const GSVector4 dRect(0, 0, dSize, 1);
 	const ShaderConvert shader = (dSize == 16) ? ShaderConvert::CLUT_4 : ShaderConvert::CLUT_8;
+	DoStretchRect(static_cast<GSTexture12*>(sTex), GSVector4::zero(), static_cast<GSTexture12*>(dTex), dRect,
+		m_convert[static_cast<int>(shader)].get(), false);
+}
+
+void GSDevice12::ConvertToIndexedTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, u32 SBW, u32 SPSM, GSTexture* dTex, u32 DBW, u32 DPSM)
+{
+	// match merge cb
+	struct Uniforms
+	{
+		float scaleX, scaleY;
+		float pad1, pad2;
+		u32 SBW, DBW, pad3;
+	};
+
+	const Uniforms cb = {sTex->GetScale().x, sTex->GetScale().y, 0.0f, 0.0f, SBW, DBW};
+	SetUtilityRootSignature();
+	SetUtilityPushConstants(&cb, sizeof(cb));
+
+	const GSVector4 dRect(0, 0, dTex->GetWidth(), dTex->GetHeight());
+	const ShaderConvert shader = ShaderConvert::RGBA_TO_8I;
 	DoStretchRect(static_cast<GSTexture12*>(sTex), GSVector4::zero(), static_cast<GSTexture12*>(dTex), dRect,
 		m_convert[static_cast<int>(shader)].get(), false);
 }
@@ -1002,7 +1024,6 @@ GSDevice12::ComPtr<ID3DBlob> GSDevice12::GetUtilityVertexShader(const std::strin
 GSDevice12::ComPtr<ID3DBlob> GSDevice12::GetUtilityPixelShader(const std::string& source, const char* entry_point)
 {
 	ShaderMacro sm_model(m_shader_cache.GetFeatureLevel());
-	sm_model.AddMacro("PS_SCALE_FACTOR", StringUtil::ToChars(GSConfig.UpscaleMultiplier));
 	return m_shader_cache.GetPixelShader(source, sm_model.GetPtr(), entry_point);
 }
 
@@ -1479,7 +1500,6 @@ const ID3DBlob* GSDevice12::GetTFXPixelShader(const GSHWDrawConfig::PSSelector& 
 		return it->second.get();
 
 	ShaderMacro sm(m_shader_cache.GetFeatureLevel());
-	sm.AddMacro("PS_SCALE_FACTOR", StringUtil::ToChars(GSConfig.UpscaleMultiplier));
 	sm.AddMacro("PS_FST", sel.fst);
 	sm.AddMacro("PS_WMS", sel.wms);
 	sm.AddMacro("PS_WMT", sel.wmt);
@@ -2456,7 +2476,6 @@ void GSDevice12::RenderHW(GSHWDrawConfig& config)
 	GSTexture12* draw_ds = static_cast<GSTexture12*>(config.ds);
 	GSTexture12* draw_rt_clone = nullptr;
 	GSTexture12* hdr_rt = nullptr;
-	GSTexture12* copy_ds = nullptr;
 
 	// Switch to hdr target for colclip rendering
 	if (pipe.ps.hdr)
@@ -2508,28 +2527,8 @@ void GSDevice12::RenderHW(GSHWDrawConfig& config)
 		}
 	}
 
-	if (config.tex)
-	{
-		if (config.tex == config.ds)
-		{
-			// requires a copy of the depth buffer. this is mainly for ico.
-			copy_ds = static_cast<GSTexture12*>(CreateDepthStencil(rtsize.x, rtsize.y, GSTexture::Format::DepthStencil, false));
-			if (copy_ds)
-			{
-				EndRenderPass();
-
-				GL_PUSH("Copy depth to temp texture for shuffle {%d,%d %dx%d}",
-					config.drawarea.left, config.drawarea.top,
-					config.drawarea.width(), config.drawarea.height());
-
-				pxAssert(copy_ds->GetState() == GSTexture::State::Invalidated);
-				CopyRect(config.ds, copy_ds, GSVector4i(config.ds->GetSize()).zwxy(), 0, 0);
-				PSSetShaderResource(0, copy_ds, true);
-			}
-		}
-	}
 	// clear texture binding when it's bound to RT or DS
-	else if (m_tfx_textures[0] &&
+	if (!config.tex && m_tfx_textures[0] &&
 			 ((config.rt && static_cast<GSTexture12*>(config.rt)->GetSRVDescriptor() == m_tfx_textures[0]) ||
 				 (config.ds && static_cast<GSTexture12*>(config.ds)->GetSRVDescriptor() == m_tfx_textures[0])))
 	{
@@ -2620,9 +2619,6 @@ void GSDevice12::RenderHW(GSHWDrawConfig& config)
 			}
 		}
 	}
-
-	if (copy_ds)
-		Recycle(copy_ds);
 
 	if (draw_rt_clone)
 		Recycle(draw_rt_clone);

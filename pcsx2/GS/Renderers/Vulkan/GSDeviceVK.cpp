@@ -627,17 +627,10 @@ void GSDeviceVK::DoStretchRect(GSTextureVK* sTex, const GSVector4& sRect, GSText
 		m_dirty_flags &= ~(DIRTY_FLAG_VIEWPORT | DIRTY_FLAG_SCISSOR);
 	}
 
-	const bool drawing_to_current_rt = (is_present || InRenderPass());
-	if (!drawing_to_current_rt)
+	if (!is_present && !InRenderPass())
 		BeginRenderPassForStretchRect(dTex, dtex_rc, dst_rc);
 
 	DrawStretchRect(sRect, dRect, size);
-
-	if (!drawing_to_current_rt)
-	{
-		EndRenderPass();
-		static_cast<GSTextureVK*>(dTex)->TransitionToLayout(VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-	}
 }
 
 void GSDeviceVK::DrawStretchRect(const GSVector4& sRect, const GSVector4& dRect, const GSVector2i& ds)
@@ -700,6 +693,25 @@ void GSDeviceVK::UpdateCLUTTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, GS
 
 	const GSVector4 dRect(0, 0, dSize, 1);
 	const ShaderConvert shader = (dSize == 16) ? ShaderConvert::CLUT_4 : ShaderConvert::CLUT_8;
+	DoStretchRect(static_cast<GSTextureVK*>(sTex), GSVector4::zero(), static_cast<GSTextureVK*>(dTex), dRect,
+		m_convert[static_cast<int>(shader)], false);
+}
+
+void GSDeviceVK::ConvertToIndexedTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, u32 SBW, u32 SPSM, GSTexture* dTex, u32 DBW, u32 DPSM)
+{
+	struct Uniforms
+	{
+		u32 SBW;
+		u32 DBW;
+		float ScaleFactor;
+		u32 pad;
+	};
+
+	const Uniforms uniforms = {SBW, DBW, sTex->GetScale().x};
+	SetUtilityPushConstants(&uniforms, sizeof(uniforms));
+
+	const ShaderConvert shader = ShaderConvert::RGBA_TO_8I;
+	const GSVector4 dRect(0, 0, dTex->GetWidth(), dTex->GetHeight());
 	DoStretchRect(static_cast<GSTextureVK*>(sTex), GSVector4::zero(), static_cast<GSTextureVK*>(dTex), dRect,
 		m_convert[static_cast<int>(shader)], false);
 }
@@ -1045,7 +1057,6 @@ VkShaderModule GSDeviceVK::GetUtilityVertexShader(const std::string& source, con
 	std::stringstream ss;
 	AddShaderHeader(ss);
 	AddShaderStageMacro(ss, true, false, false);
-	AddMacro(ss, "PS_SCALE_FACTOR", StringUtil::ToChars(GSConfig.UpscaleMultiplier).c_str());
 	if (replace_main)
 		ss << "#define " << replace_main << " main\n";
 	ss << source;
@@ -1058,7 +1069,6 @@ VkShaderModule GSDeviceVK::GetUtilityFragmentShader(const std::string& source, c
 	std::stringstream ss;
 	AddShaderHeader(ss);
 	AddShaderStageMacro(ss, false, false, true);
-	AddMacro(ss, "PS_SCALE_FACTOR", StringUtil::ToChars(GSConfig.UpscaleMultiplier).c_str());
 	if (replace_main)
 		ss << "#define " << replace_main << " main\n";
 	ss << source;
@@ -1904,8 +1914,6 @@ VkShaderModule GSDeviceVK::GetTFXVertexShader(GSHWDrawConfig::VSSelector sel)
 	AddMacro(ss, "VS_FST", sel.fst);
 	AddMacro(ss, "VS_IIP", sel.iip);
 	AddMacro(ss, "VS_POINT_SIZE", sel.point_size);
-	if (sel.point_size)
-		AddMacro(ss, "VS_POINT_SIZE_VALUE", StringUtil::ToChars(GSConfig.UpscaleMultiplier).c_str());
 	ss << m_tfx_source;
 
 	VkShaderModule mod = g_vulkan_shader_cache->GetVertexShader(ss.str());
@@ -1991,7 +1999,6 @@ VkShaderModule GSDeviceVK::GetTFXFragmentShader(const GSHWDrawConfig::PSSelector
 	AddMacro(ss, "PS_ZCLAMP", sel.zclamp);
 	AddMacro(ss, "PS_PABE", sel.pabe);
 	AddMacro(ss, "PS_SCANMSK", sel.scanmsk);
-	AddMacro(ss, "PS_SCALE_FACTOR", StringUtil::ToChars(GSConfig.UpscaleMultiplier).c_str());
 	AddMacro(ss, "PS_TEX_IS_FB", sel.tex_is_fb);
 	AddMacro(ss, "PS_NO_COLOR", sel.no_color);
 	AddMacro(ss, "PS_NO_COLOR1", sel.no_color1);
@@ -2321,7 +2328,7 @@ void GSDeviceVK::PSSetShaderResource(int i, GSTexture* sr, bool check_state)
 		{
 			if (vkTex->GetTexture().GetLayout() != VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && InRenderPass())
 			{
-				// Console.Warning("Ending render pass due to resource transition");
+				GL_INS("Ending render pass due to resource transition");
 				EndRenderPass();
 			}
 
@@ -2947,7 +2954,6 @@ void GSDeviceVK::RenderHW(GSHWDrawConfig& config)
 	GSTextureVK* draw_ds = static_cast<GSTextureVK*>(config.ds);
 	GSTextureVK* draw_rt_clone = nullptr;
 	GSTextureVK* hdr_rt = nullptr;
-	GSTextureVK* copy_ds = nullptr;
 
 	// Switch to hdr target for colclip rendering
 	if (pipe.ps.hdr)
@@ -2998,26 +3004,6 @@ void GSDeviceVK::RenderHW(GSHWDrawConfig& config)
 		}
 	}
 
-	if (config.tex)
-	{
-		if (config.tex == config.ds)
-		{
-			// requires a copy of the depth buffer. this is mainly for ico.
-			copy_ds = static_cast<GSTextureVK*>(CreateDepthStencil(rtsize.x, rtsize.y, GSTexture::Format::DepthStencil, false));
-			if (copy_ds)
-			{
-				EndRenderPass();
-
-				GL_PUSH("Copy depth to temp texture for shuffle {%d,%d %dx%d}",
-					config.drawarea.left, config.drawarea.top,
-					config.drawarea.width(), config.drawarea.height());
-
-				pxAssert(copy_ds->GetState() == GSTexture::State::Invalidated);
-				CopyRect(config.ds, copy_ds, GSVector4i(config.ds->GetSize()).zwxy(), 0, 0);
-				PSSetShaderResource(0, copy_ds, true);
-			}
-		}
-	}
 	// clear texture binding when it's bound to RT or DS
 	if (!config.tex && m_tfx_textures[0] &&
 		((!pipe.feedback_loop && config.rt && static_cast<GSTextureVK*>(config.rt)->GetView() == m_tfx_textures[0]) ||
@@ -3145,9 +3131,6 @@ void GSDeviceVK::RenderHW(GSHWDrawConfig& config)
 			}
 		}
 	}
-
-	if (copy_ds)
-		Recycle(copy_ds);
 
 	if (draw_rt_clone)
 		Recycle(draw_rt_clone);

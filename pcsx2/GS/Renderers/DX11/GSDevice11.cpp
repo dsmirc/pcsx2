@@ -148,14 +148,9 @@ bool GSDevice11::Create()
 		return false;
 	}
 
-	ShaderMacro sm_convert(m_shader_cache.GetFeatureLevel());
-	sm_convert.AddMacro("PS_SCALE_FACTOR", StringUtil::ToChars(GSConfig.UpscaleMultiplier));
-
-	D3D_SHADER_MACRO* sm_convert_ptr = sm_convert.GetPtr();
-
 	for (size_t i = 0; i < std::size(m_convert.ps); i++)
 	{
-		m_convert.ps[i] = m_shader_cache.GetPixelShader(m_dev.get(), *convert_hlsl, sm_convert_ptr, shaderName(static_cast<ShaderConvert>(i)));
+		m_convert.ps[i] = m_shader_cache.GetPixelShader(m_dev.get(), *convert_hlsl, sm_model.GetPtr(), shaderName(static_cast<ShaderConvert>(i)));
 		if (!m_convert.ps[i])
 			return false;
 	}
@@ -603,6 +598,7 @@ void GSDevice11::StretchRect(GSTexture* sTex, const GSVector4& sRect, GSTexture*
 {
 	pxAssert(dTex->IsDepthStencil() == HasDepthOutput(shader));
 	pxAssert(linear ? SupportsBilinear(shader) : SupportsNearest(shader));
+
 	StretchRect(sTex, sRect, dTex, dRect, m_convert.ps[static_cast<int>(shader)].get(), nullptr, linear);
 }
 
@@ -788,13 +784,30 @@ void GSDevice11::UpdateCLUTTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, GS
 		float scaleX, scaleY;
 		float pad1[2];
 		u32 offsetX, offsetY, dOffset;
-		u32 pad2;
 	};
 	const Uniforms cb = {sTex->GetScale().x, sTex->GetScale().y, {0.0f, 0.0f}, offsetX, offsetY, dOffset};
 	m_ctx->UpdateSubresource(m_merge.cb.get(), 0, nullptr, &cb, 0, 0);
 
 	const GSVector4 dRect(0, 0, dSize, 1);
 	const ShaderConvert shader = (dSize == 16) ? ShaderConvert::CLUT_4 : ShaderConvert::CLUT_8;
+	StretchRect(sTex, GSVector4::zero(), dTex, dRect, m_convert.ps[static_cast<int>(shader)].get(), m_merge.cb.get(), nullptr, false);
+}
+
+void GSDevice11::ConvertToIndexedTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, u32 SBW, u32 SPSM, GSTexture* dTex, u32 DBW, u32 DPSM)
+{
+	// match merge cb
+	struct Uniforms
+	{
+		float scaleX, scaleY;
+		float pad1, pad2;
+		u32 SBW, DBW, pad3;
+	};
+
+	const Uniforms cb = {sTex->GetScale().x, sTex->GetScale().y, 0.0f, 0.0f, SBW, DBW};
+	m_ctx->UpdateSubresource(m_merge.cb.get(), 0, nullptr, &cb, 0, 0);
+
+	const GSVector4 dRect(0, 0, dTex->GetWidth(), dTex->GetHeight());
+	const ShaderConvert shader = ShaderConvert::RGBA_TO_8I;
 	StretchRect(sTex, GSVector4::zero(), dTex, dRect, m_convert.ps[static_cast<int>(shader)].get(), m_merge.cb.get(), nullptr, false);
 }
 
@@ -1351,7 +1364,6 @@ void GSDevice11::RenderHW(GSHWDrawConfig& config)
 	PSSetShaderResources(config.tex, config.pal);
 
 	GSTexture* rt_copy = nullptr;
-	GSTexture* ds_copy = nullptr;
 	if (config.require_one_barrier || (config.tex && config.tex == config.rt)) // Used as "bind rt" flag when texture barrier is unsupported
 	{
 		// Bind the RT.This way special effect can use it.
@@ -1366,15 +1378,6 @@ void GSDevice11::RenderHW(GSHWDrawConfig& config)
 			if (config.tex && config.tex == config.rt)
 				PSSetShaderResource(0, rt_copy);
 		}
-	}
-
-	if (config.tex && config.tex == config.ds)
-	{
-		// mainly for ico (depth buffer used as texture)
-		// binding to 0 here is safe, because config.tex can't equal both tex and rt
-		CloneTexture(config.ds, &ds_copy, config.drawarea);
-		if (ds_copy)
-			PSSetShaderResource(0, ds_copy);
 	}
 
 	SetupVS(config.vs, &config.cb_vs);
@@ -1449,8 +1452,6 @@ void GSDevice11::RenderHW(GSHWDrawConfig& config)
 
 	if (rt_copy)
 		Recycle(rt_copy);
-	if (ds_copy)
-		Recycle(ds_copy);
 	if (primid_tex)
 		Recycle(primid_tex);
 

@@ -749,7 +749,6 @@ bool GSDeviceMTL::Create()
 		// Init metal stuff
 		m_fn_constants = MRCTransfer([MTLFunctionConstantValues new]);
 		vector_float2 upscale2 = vector2(GSConfig.UpscaleMultiplier, GSConfig.UpscaleMultiplier);
-		[m_fn_constants setConstantValue:&upscale2 type:MTLDataTypeFloat2 atIndex:GSMTLConstantIndex_SCALING_FACTOR];
 		setFnConstantB(m_fn_constants, m_dev.features.framebuffer_fetch, GSMTLConstantIndex_FRAMEBUFFER_FETCH);
 
 		m_draw_sync_fence = MRCTransfer([m_dev.dev newFence]);
@@ -1273,6 +1272,18 @@ void GSDeviceMTL::UpdateCLUTTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, G
 	RenderCopy(sTex, m_clut_pipeline[!is_clut4], dRect);
 }
 
+void GSDeviceMTL::ConvertToIndexedTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, u32 SBW, u32 SPSM, GSTexture* dTex, u32 DBW, u32 DPSM)
+{ @autoreleasepool {
+	const ShaderConvert shader = ShaderConvert::RGBA_TO_8I;
+	id<MTLRenderPipelineState> pipeline = m_convert_pipeline[static_cast<int>(shader)];
+	if (!pipeline)
+		[NSException raise:@"StretchRect Missing Pipeline" format:@"No pipeline for %d", static_cast<int>(shader)];
+
+	GSMTLIndexedConvertPSUniform uniform = { ToSimd(sTex->GetScale()), SBW, DBW };
+
+	DoStretchRect(sTex, sRect, dTex, dRect, pipeline, linear, LoadAction::DontCareIfFull, &uniform, sizeof(uniform));
+}}
+
 void GSDeviceMTL::FlushClears(GSTexture* tex)
 {
 	if (tex)
@@ -1604,6 +1615,7 @@ static_assert(offsetof(GSHWDrawConfig::PSConstantBuffer, ChannelShuffle)   == of
 static_assert(offsetof(GSHWDrawConfig::PSConstantBuffer, TCOffsetHack)     == offsetof(GSMTLMainPSUniform, tc_offset));
 static_assert(offsetof(GSHWDrawConfig::PSConstantBuffer, STScale)          == offsetof(GSMTLMainPSUniform, st_scale));
 static_assert(offsetof(GSHWDrawConfig::PSConstantBuffer, DitherMatrix)     == offsetof(GSMTLMainPSUniform, dither_matrix));
+static_assert(offsetof(GSHWDrawConfig::PSConstantBuffer, ScaleFactor)      == offsetof(GSMTLMainPSUniform, scaled_scale_factor));
 
 void GSDeviceMTL::SetupDestinationAlpha(GSTexture* rt, GSTexture* ds, const GSVector4i& r, bool datm)
 {

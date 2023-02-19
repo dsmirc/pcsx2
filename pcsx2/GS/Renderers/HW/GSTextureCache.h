@@ -181,6 +181,34 @@ public:
 		bool operator()(const PaletteKey& lhs, const PaletteKey& rhs) const;
 	};
 
+	class Target : public Surface
+	{
+	public:
+		const int m_type = 0;
+		bool m_used = false;
+		GSDirtyRectList m_dirty;
+		GSVector4i m_valid{};
+		GSVector4i m_drawn_since_read{};
+		const bool m_depth_supported = false;
+		bool m_dirty_alpha = true;
+		bool m_is_frame = false;
+		int readbacks_since_draw = 0;
+
+	public:
+		Target(const GIFRegTEX0& TEX0, const bool depth_supported, const int type);
+		~Target();
+
+		void UpdateValidity(const GSVector4i& rect);
+
+		void Update(bool reset_age, GIFRegTEX0 TEX0);
+
+		/// Updates the target, if the dirty area intersects with the specified rectangle.
+		void UpdateIfDirtyIntersects(const GSVector4i& rc);
+
+		bool ResizeTexture(int new_width, int new_height, bool recycle_old = true);
+		bool ResizeTexture(int new_width, int new_height, GSVector2 new_scale, bool recycle_old = true);
+	};
+
 	class Source : public Surface
 	{
 		struct
@@ -209,8 +237,8 @@ public:
 		// Keep a trace of the target origin. There is no guarantee that pointer will
 		// still be valid on future. However it ought to be good when the source is created
 		// so it can be used to access un-converted data for the current draw call.
-		GSTexture** m_from_target;
-		GIFRegTEX0 m_from_target_TEX0; // TEX0 of the target texture, if any, else equal to texture TEX0
+		Target* m_from_target;
+		GIFRegTEX0 m_from_target_TEX0; // TEX0 of the target texture, if any, else equal to texture TEX0, TODO get rid of me
 		GIFRegTEX0 m_layer_TEX0[7]; // Detect already loaded value
 		HashType m_layer_hash[7];
 		// Keep a GSTextureCache::SourceMap::m_map iterator to allow fast erase
@@ -229,34 +257,6 @@ public:
 		void UpdateLayer(const GIFRegTEX0& TEX0, const GSVector4i& rect, int layer = 0);
 
 		bool ClutMatch(const PaletteKey& palette_key);
-	};
-
-	class Target : public Surface
-	{
-	public:
-		const int m_type = 0;
-		bool m_used = false;
-		GSDirtyRectList m_dirty;
-		GSVector4i m_valid{};
-		GSVector4i m_drawn_since_read{};
-		const bool m_depth_supported = false;
-		bool m_dirty_alpha = true;
-		bool m_is_frame = false;
-		int readbacks_since_draw = 0;
-
-	public:
-		Target(const GIFRegTEX0& TEX0, const bool depth_supported, const int type);
-		~Target();
-
-		void UpdateValidity(const GSVector4i& rect);
-
-		void Update(bool reset_age);
-
-		/// Updates the target, if the dirty area intersects with the specified rectangle.
-		void UpdateIfDirtyIntersects(const GSVector4i& rc);
-
-		bool ResizeTexture(int new_width, int new_height, bool recycle_old = true);
-		bool ResizeTexture(int new_width, int new_height, GSVector2 new_scale, bool recycle_old = true);
 	};
 
 	class PaletteMap
@@ -305,7 +305,7 @@ public:
 
 			struct
 			{
-				u32 fbp : 14;
+				u32 bp : 14;
 				u32 fbw : 6;
 				u32 psm : 6;
 				u32 pad : 6;
@@ -404,14 +404,16 @@ public:
 	Source* LookupSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, const GIFRegCLAMP& CLAMP, const GSVector4i& r, const GSVector2i* lod);
 	Source* LookupDepthSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, const GIFRegCLAMP& CLAMP, const GSVector4i& r, bool palette = false);
 
-	Target* LookupTarget(const GIFRegTEX0& TEX0, const GSVector2i& size, int type, bool used, u32 fbmask = 0, const bool is_frame = false, const int real_w = 0, const int real_h = 0, bool preload = GSConfig.PreloadFrameWithGSData);
-	Target* LookupDisplayTarget(const GIFRegTEX0& TEX0, const GSVector2i& size, const int real_w, const int real_h);
+	Target* LookupTarget(GIFRegTEX0 TEX0, const GSVector2i& size, const GSVector2& scale, int type, bool used, u32 fbmask = 0, const bool is_frame = false, const int real_w = 0, const int real_h = 0, bool preload = GSConfig.PreloadFrameWithGSData);
+	Target* LookupDisplayTarget(GIFRegTEX0 TEX0, const GSVector2i& size, const GSVector2& scale, const int real_w, const int real_h);
 
 	/// Looks up a target in the cache, and only returns it if the BP/BW/PSM match exactly.
 	Target* GetExactTarget(u32 BP, u32 BW, u32 PSM) const;
 	Target* GetTargetWithSharedBits(u32 BP, u32 PSM) const;
 
-	u32 GetTargetHeight(u32 fbp, u32 fbw, u32 psm, u32 min_height);
+	GSVector2i GetTargetSize(GIFRegTEX0 TEX0, int type, const GSVector4i& draw_size);
+	u32 GetTargetHeight(u32 bp, u32 fbw, u32 psm, u32 min_height);
+	bool Has32BitTarget(u32 bp);
 
 	void ExpandTarget(const GIFRegBITBLTBUF& BITBLTBUF, const GSVector4i& r);
 	void InvalidateVideoMemType(int type, u32 bp);

@@ -80,17 +80,27 @@ private:
 	bool CanUseSwPrimRender(bool no_rt, bool no_ds, bool draw_sprite_tex);
 	bool (*SwPrimRender)(GSRendererHW&, bool invalidate_tc);
 
+	void PrepareTextureSource(
+		GIFRegTEX0& TEX0, GIFRegCLAMP& MIP_CLAMP, GSVector2i& hash_lod_range, TextureMinMaxResult& tmm);
+	void LookupTextureSource(const GSDrawingEnvironment& env, GIFRegTEX0 TEX0, GIFRegCLAMP& MIP_CLAMP,
+		const GSVector2i& hash_lod_range, TextureMinMaxResult& tmm, bool single_page, bool draw_sprite_tex,
+		u32 fm_mask, bool no_rt);
+
 	template <bool linear>
 	void RoundSpriteOffset();
 
-	void DrawPrims(GSTexture* rt, GSTexture* ds, GSTextureCache::Source* tex);
+	void DrawPrims(GSTexture* rt, GSTexture* ds, GSTextureCache::Source* tex, const TextureMinMaxResult& tmm);
 
 	void ResetStates();
 	void SetupIA(const float& sx, const float& sy);
 	void EmulateTextureShuffleAndFbmask();
-	void EmulateChannelShuffle(const GSTextureCache::Source* tex);
+	bool EmulateChannelShuffle(GSTextureCache::Target* src, bool test_only);
 	void EmulateBlending(bool& DATE_PRIMID, bool& DATE_BARRIER, bool& blending_alpha_pass);
-	void EmulateTextureSampler(const GSTextureCache::Source* tex);
+
+	void EmulateTextureSampler(const GSTextureCache::Source* tex, const TextureMinMaxResult& tmm);
+	bool CanUseTexIsFB() const;
+	void HandleTextureHazards(const TextureMinMaxResult& tmm);
+
 	void EmulateZbuffer();
 	void EmulateATST(float& AREF, GSHWDrawConfig::PSSelector& ps, bool pass_2);
 
@@ -98,7 +108,6 @@ private:
 
 	GSTextureCache* m_tc;
 	GSVector4i m_r = {};
-	GSTextureCache::Source* m_src = nullptr;
 
 	// CRC Hacks
 	bool IsBadFrame();
@@ -110,10 +119,14 @@ private:
 	u32 m_last_channel_shuffle_fbmsk = 0;
 	bool m_channel_shuffle = false;
 
-	bool m_tex_is_fb = false;
 	bool m_userhacks_tcoffset = false;
 	float m_userhacks_tcoffset_x = 0.0f;
 	float m_userhacks_tcoffset_y = 0.0f;
+
+	GSTextureCache::Target* m_rt = nullptr;
+	GSTextureCache::Target* m_ds = nullptr;
+	GSTextureCache::Source* m_src = nullptr;
+	GSTexture* m_src_copy = nullptr;
 
 	GSVector2i m_lod = {}; // Min & Max level of detail
 
@@ -134,6 +147,11 @@ public:
 
 	__fi static GSRendererHW* GetInstance() { return static_cast<GSRendererHW*>(g_gs_renderer.get()); }
 	__fi GSTextureCache* GetTextureCache() const { return m_tc; }
+	__fi GSTextureCache::Target* GetRT() const { return m_rt; }
+	__fi GSTextureCache::Target* GetDS() const { return m_ds; }
+	__fi GSTextureCache::Source* GetSource() const { return m_src; }
+	__fi bool IsChannelShuffle() const { return m_channel_shuffle; }
+	__fi bool IsTextureShuffle() const { return m_texture_shuffle; }
 
 	void Destroy() override;
 
@@ -151,7 +169,6 @@ public:
 	void MergeSprite(GSTextureCache::Source* tex);
 	GSVector2 GetTextureScaleFactor() override;
 	GSVector2i GetOutputSize(int real_h);
-	GSVector2i GetTargetSize(GSVector2i* unscaled_size = nullptr);
 
 	void Reset(bool hardware_reset) override;
 	void UpdateSettings(const Pcsx2Config::GSOptions& old_config) override;
@@ -168,9 +185,6 @@ public:
 	void PurgeTextureCache() override;
 	GSTexture* LookupPaletteSource(u32 CBP, u32 CPSM, u32 CBW, GSVector2i& offset, const GSVector2i& size) override;
 
-	// Called by the texture cache to know if current texture is useful
-	bool UpdateTexIsFB(GSTextureCache::Target* src, const GIFRegTEX0& TEX0);
-
-	// Called by the texture cache when optimizing the copy range for sources
-	bool IsPossibleTextureShuffle(GSTextureCache::Target* dst, const GIFRegTEX0& TEX0) const;
+	/// Called by the texture cache to know for certain whether there is a channel shuffle.
+	bool TestChannelShuffle(GSTextureCache::Target* src);
 };
