@@ -743,6 +743,7 @@ bool GSDeviceMTL::Create()
 	m_features.dual_source_blend = true;
 	m_features.stencil_buffer = true;
 	m_features.cas_sharpening = true;
+	m_features.test_and_sample_depth = false;
 
 	try
 	{
