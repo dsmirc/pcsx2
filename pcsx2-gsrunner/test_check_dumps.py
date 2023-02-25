@@ -76,10 +76,11 @@ def check_regression_test(baselinedir, testdir, name):
                 write("<table width=\"100%\">")
                 first_fail = False
 
-            imguri1 = Path(path1).as_uri()
-            imguri2 = Path(path2).as_uri()
-            write("<tr><td colspan=\"2\">Frame %d</td></tr>" % (framenum))
-            write("<tr><td><img src=\"%s\" /></td><td><img src=\"%s\" /></td></tr>" % (imguri1, imguri2))
+            if len(diff_frames) < 5:
+                imguri1 = Path(path1).as_uri()
+                imguri2 = Path(path2).as_uri()
+                write("<tr><td colspan=\"2\">Frame %d</td></tr>" % (framenum))
+                write("<tr><td><img src=\"%s\" /></td><td><img src=\"%s\" /></td></tr>" % (imguri1, imguri2))
 
     if len(diff_frames) > 0:
         write("</table>")

@@ -795,7 +795,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 
 		if (TEX0.TBW > 0 && supported_fmt)
 		{
-			const bool forced_preload = GSRendererHW::GetInstance()->m_force_preload > 0;
+			const bool forced_preload = false;// GSRendererHW::GetInstance()->m_force_preload > 0;
 			const GSVector4i newrect = GSVector4i(0, 0, real_w, real_h);
 
 			if (!is_frame && !forced_preload && !preload)
@@ -1384,7 +1384,17 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 						if (eewrite)
 							t->m_age = 0;
 
-						AddDirtyRectTarget(t, so.b2a_offset, t->m_TEX0.PSM, t->m_TEX0.TBW);
+						if (t->m_valid.rintersect(so.b2a_offset).eq(t->m_valid))
+						{
+							i = list.erase(j);
+							GL_CACHE("TC: Remove Target(%s) %d (0x%x) Inside RT", to_string(type),
+								t->m_texture ? t->m_texture->GetID() : 0, t->m_TEX0.TBP0);
+							delete t;
+						}
+						else
+						{
+							AddDirtyRectTarget(t, so.b2a_offset, t->m_TEX0.PSM, t->m_TEX0.TBW);
+						}
 					}
 				}
 #endif
@@ -1972,6 +1982,99 @@ bool GSTextureCache::Has32BitTarget(u32 bp)
 	return false;
 }
 
+bool GSTextureCache::CreatePageAlteredSource(Source* src, const GSVector2i& size, const GSVector2& scale)
+{
+	// compute new end block based on size
+	const GIFRegTEX0 TEX0{src->m_TEX0};
+	const GSVector2i unscaled_size(
+		static_cast<int>(static_cast<float>(size.x) / scale.x), static_cast<int>(static_cast<float>(size.y) / scale.y));
+	const u32 end_block =
+		GSLocalMemory::m_psm[TEX0.PSM].info.bn(unscaled_size.x - 1, unscaled_size.y - 1, TEX0.TBP0, TEX0.TBW);
+	GL_PUSH("Merging targets from %x through %x", TEX0.TBP0, end_block);
+
+	const GSLocalMemory::psm_t& psm = GSLocalMemory::m_psm[TEX0.PSM];
+	const int page_width = psm.pgs.x;
+	const int page_height = psm.pgs.y;
+	const int page_blocks = (page_width / psm.bs.x) * (page_height / psm.bs.y);
+
+	const int num_pages = ((end_block + 1) - TEX0.TBP0) / page_blocks;
+	const int width_in_pages = (TEX0.TBW * 64) / page_width;
+
+	int page_x = 0;
+	int page_y = 0;
+
+	GSTexture* dtex = g_gs_device->CreateTexture(size.x, size.y, 1, GSTexture::Format::Color, true);
+	dtex->SetScale(scale);
+
+	u32 current_TBP0 = TEX0.TBP0;
+	for (int page_num = 0; page_num < num_pages; page_num++)
+	{
+		const u32 this_start_block = current_TBP0;
+		const u32 this_end_block = (current_TBP0 + page_blocks) - 1;
+		const u32 dest_x = page_x * page_width;
+		const u32 dest_y = page_y * page_height;
+		bool found = false;
+		GL_INS("Searching for block range %x - %x for (%u,%u)", this_start_block, this_end_block, dest_x, dest_y);
+
+		for (auto i = m_dst[RenderTarget].begin(); i != m_dst[RenderTarget].end(); ++i)
+		{
+			Target* const t = *i;
+			if (this_start_block >= t->m_TEX0.TBP0 && this_end_block <= t->m_end_block && t->m_TEX0.PSM == TEX0.PSM)
+			{
+				GL_INS("  Candidate at BP %x BW %d PSM %d", t->m_TEX0.TBP0, t->m_TEX0.TBW, t->m_TEX0.PSM);
+
+				GSVector4i src_rect(GSVector4i(psm.pgs).zwxy());
+				if (this_start_block > t->m_TEX0.TBP0)
+				{
+#if 0
+					const SurfaceOffset so(ComputeSurfaceOffset(this_start_block, TEX0.TBW, TEX0.PSM, src_rect, t));
+#else
+					SurfaceOffsetKey sok;
+					sok.elems[0].bp = this_start_block;
+					sok.elems[0].bw = TEX0.TBW;
+					sok.elems[0].psm = TEX0.PSM;
+					sok.elems[0].rect = src_rect;
+					sok.elems[1].bp = t->m_TEX0.TBP0;
+					sok.elems[1].bw = t->m_TEX0.TBW;
+					sok.elems[1].psm = t->m_TEX0.PSM;
+					sok.elems[1].rect = GSVector4i(0, 0, t->m_texture->GetWidth(), t->m_texture->GetHeight()); // t->m_valid; 
+					const SurfaceOffset so(ComputeSurfaceOffset(sok));
+#endif
+
+					if (!so.is_valid)
+						continue;
+
+					src_rect = so.b2a_offset;
+				}
+
+				GL_INS("  Copy from %d,%d -> %d,%d (%dx%d)", src_rect.left, src_rect.top, dest_x, dest_y, src_rect.width(), src_rect.height());
+				g_gs_device->CopyRect(t->m_texture, dtex, GSVector4i(GSVector4(src_rect) * GSVector4(scale).xyxy()),
+					static_cast<u32>(static_cast<float>(dest_x) * scale.x),
+					static_cast<u32>(static_cast<float>(dest_y) * scale.y));
+				found = true;
+				break;
+			}
+		}
+
+		if (!found)
+		{
+			GL_INS("  *** NOT FOUND");
+		}
+
+		current_TBP0 += page_blocks;
+		page_x++;
+		if (page_x == width_in_pages)
+		{
+			page_x = 0;
+			page_y++;
+		}
+	}
+
+	src->m_texture = dtex;
+	src->m_end_block = end_block;
+	return true;
+}
+
 // Hack: remove Target that are strictly included in current rt. Typically uses for FMV
 // For example, game is rendered at 0x800->0x1000, fmv will be uploaded to 0x0->0x2800
 // FIXME In theory, we ought to report the data from the sub rt to the main rt. But let's
@@ -2139,19 +2242,23 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 
 		// if we have a source larger than the target (from tex-in-rt), we need to clear it, otherwise we'll read junk
 		const bool outside_target = ((x + w) > dst->m_texture->GetWidth() || (y + h) > dst->m_texture->GetHeight());
-		GSTexture* sTex = dst->m_texture;
-		GSTexture* dTex = outside_target ?
-							  g_gs_device->CreateRenderTarget(w, h, GSTexture::Format::Color, true) :
-							  g_gs_device->CreateTexture(w, h, tlevels, GSTexture::Format::Color, true);
-		m_source_memory_usage += dTex->GetMemUsage();
+		if (dst->m_TEX0.TBW == TEX0.TBW || !CreatePageAlteredSource(src, GSVector2i(w, h), scale))
+		{
+			GSTexture* sTex = dst->m_texture;
+			GSTexture* dTex = outside_target ?
+									g_gs_device->CreateRenderTarget(w, h, GSTexture::Format::Color, true) :
+									g_gs_device->CreateTexture(w, h, tlevels, GSTexture::Format::Color, true);
 
-		// copy the rt in
-		const GSVector4i area(GSVector4i(x, y, x + w, y + h).rintersect(GSVector4i(sTex->GetSize()).zwxy()));
-		if (!area.rempty())
-			g_gs_device->CopyRect(sTex, dTex, area, 0, 0);
+			// copy the rt in
+			const GSVector4i area(GSVector4i(x, y, x + w, y + h).rintersect(GSVector4i(sTex->GetSize()).zwxy()));
+			if (!area.rempty())
+				g_gs_device->CopyRect(sTex, dTex, area, 0, 0);
+			src->m_texture = dTex;
+		}
+
+		m_source_memory_usage += src->m_texture->GetMemUsage();
 
 		// Keep a trace of origin of the texture
-		src->m_texture = dTex;
 		src->m_target = true;
 		src->m_from_target = dst;
 		src->m_from_target_TEX0 = dst->m_TEX0;
@@ -2319,7 +2426,13 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 			// TODO: Do we need this? It'll get invalidated itself..
 			m_temporary_source = src;
 		}
-		else
+		else if (use_texture && TEX0.TBW != dst->m_TEX0.TBW)
+		{
+			const GSVector2i merge_size(static_cast<int>(dst->m_texture->GetScale().x * tw), static_cast<int>(dst->m_texture->GetScale().y* th));
+			CreatePageAlteredSource(src, merge_size, dst->m_texture->GetScale());
+		}
+
+		if (!src->m_texture)
 		{
 			// Don't be fooled by the name. 'dst' is the old target (hence the input)
 			// 'src' is the new texture cache entry (hence the output)
@@ -2328,7 +2441,6 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 								  g_gs_device->CreateTexture(w, h, 1, GSTexture::Format::Color, true) :
 								  g_gs_device->CreateRenderTarget(w, h, GSTexture::Format::Color, false);
 			dTex->SetScale(scale);
-			m_source_memory_usage += dTex->GetMemUsage();
 
 			if (use_texture)
 			{
@@ -2351,6 +2463,8 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 
 			src->m_texture = dTex;
 		}
+
+		m_source_memory_usage += src->m_texture->GetMemUsage();
 
 		// GH: by default (m_paltex == 0) GS converts texture to the 32 bit format
 		// However it is different here. We want to reuse a Render Target as a texture.

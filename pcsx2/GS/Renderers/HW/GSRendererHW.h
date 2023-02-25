@@ -59,6 +59,7 @@ private:
 	bool OI_BlitFMV(GSTextureCache::Target* _rt, GSTextureCache::Source* t, const GSVector4i& r_draw);
 	bool OI_GsMemClear(); // always on
 	void OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds); // always on
+	bool OI_DoubleHalfClearP1();
 
 	u16 Interpolate_UV(float alpha, int t0, int t1);
 	float alpha0(int L, int X0, int X1);

@@ -1363,6 +1363,9 @@ void GSRendererHW::Draw()
 				return;
 			}
 		}
+
+		if (IsConstantDirectWriteMemClear(false) && IsBlendedOrOpaque() && OI_DoubleHalfClearP1())
+			return;
 	}
 
 	// Disable texture mapping if the blend is black and using alpha from vertex.
@@ -4424,6 +4427,85 @@ void GSRendererHW::OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCach
 		g_gs_device->ClearRenderTarget(rt->m_texture, color);
 	}
 }
+
+bool GSRendererHW::OI_DoubleHalfClearP1()
+{
+	// Note gs mem clear must be tested before calling this function
+
+	// Limit further to unmask Z write
+	if (!m_context->ZBUF.ZMSK)
+	{
+		const GSVertex* v = &m_vertex.buff[0];
+		const GSLocalMemory::psm_t& frame_psm = GSLocalMemory::m_psm[m_context->FRAME.PSM];
+		//const GSLocalMemory::psm_t& depth_psm = GSLocalMemory::m_psm[m_context->ZBUF.PSM];
+
+		// Z and color must be constant and the same
+		if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z || v[1].XYZ.Z != v[1].RGBAQ.U32[0])
+			return false;
+
+		// Format doesn't have the same size. It smells fishy (xmen...)
+		//if (frame_psm.trbpp != depth_psm.trbpp)
+		//	return;
+
+		// Size of the current draw
+		const u32 w_pages = static_cast<u32>(roundf(m_vt.m_max.p.x / frame_psm.pgs.x));
+		const u32 h_pages = static_cast<u32>(roundf(m_vt.m_max.p.y / frame_psm.pgs.y));
+		const u32 written_pages = w_pages * h_pages;
+
+		// Frame and depth pointer can be inverted
+		u32 base = 0, half = 0;
+		if (m_context->FRAME.FBP > m_context->ZBUF.ZBP)
+		{
+			base = m_context->ZBUF.ZBP;
+			half = m_context->FRAME.FBP;
+		}
+		else
+		{
+			base = m_context->FRAME.FBP;
+			half = m_context->ZBUF.ZBP;
+		}
+
+		// If both buffers are side by side we can expect a fast clear in on-going
+		if (half <= (base + written_pages))
+		{
+			// Take the vertex colour, but check if the blending would make it black.
+			u32 vert_color = v[1].RGBAQ.U32[0];
+			if (PRIM->ABE && m_context->ALPHA.IsBlack())
+				vert_color &= ~0xFF000000;
+			const u32 color = vert_color;
+			const bool clear_depth = (m_context->FRAME.FBP > m_context->ZBUF.ZBP);
+			if (color != 0)
+				return false;
+
+			GL_INS("OI_DoubleHalfClear:%s: base %x half %x. w_pages %d h_pages %d fbw %d. Color %x",
+				clear_depth ? "depth" : "target", base << 5, half << 5, w_pages, h_pages, m_context->FRAME.FBW, color);
+
+			m_tc->InvalidateVideoMem(m_context->offset.fb, m_r, false, true);
+			return true;
+		}
+	}
+	// Striped double clear done by Powerdrome and Snoopy Vs Red Baron, it will clear in 32 pixel stripes half done by the Z and half done by the FRAME
+	else if (m_context->FRAME.FBP == m_context->ZBUF.ZBP && (m_context->FRAME.PSM & 0x30) != (m_context->ZBUF.PSM & 0x30)
+			&& (m_context->FRAME.PSM & 0xF) == (m_context->ZBUF.PSM & 0xF) && m_vt.m_eq.z == 1)
+	{
+		const GSVertex* v = &m_vertex.buff[0];
+
+		// Z and color must be constant and the same
+		if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z || v[1].XYZ.Z != v[1].RGBAQ.U32[0])
+			return false;
+
+		// If both buffers are side by side we can expect a fast clear in on-going
+		const u32 color = v[1].RGBAQ.U32[0];
+		if (color != 0)
+			return false;
+
+		m_tc->InvalidateVideoMem(m_context->offset.fb, m_r, false, true);
+		return true;
+	}
+
+	return false;
+}
+
 
 // Note: hack is safe, but it could impact the perf a little (normally games do only a couple of clear by frame)
 bool GSRendererHW::OI_GsMemClear()

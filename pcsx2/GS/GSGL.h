@@ -18,7 +18,7 @@
 #include "GS/Renderers/Common/GSDevice.h"
 #include "GS/GSExtra.h"
 
-#if !defined(NDEBUG) || defined(_DEBUG) || defined(_DEVEL)
+#if !defined(NDEBUG) || defined(_DEBUG) || defined(PCSX2_DEVBUILD)
 #define ENABLE_OGL_DEBUG // Create a debug context and check opengl command status. Allow also to dump various textures/states.
   //#define ENABLE_TRACE_REG // print GS reg write
  //#define ENABLE_EXTRA_LOG // print extra log
@@ -26,7 +26,7 @@
 
 // Note: GL messages are present in common code, so in all renderers.
 
-#if defined(_DEBUG)
+#if defined(PCSX2_DEVBUILD)
 	#define GL_CACHE(...) g_gs_device->InsertDebugMessage(GSDevice::DebugMessageCategory::Cache, __VA_ARGS__)
 #else
 	#define GL_CACHE(...) (void)(0)
