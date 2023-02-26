@@ -2486,6 +2486,11 @@ void GSRendererHW::Draw()
 		}
 	}
 
+	if (rt && !preserve_rt_color && m_r.rintersect(rt->m_valid).eq(rt->m_valid))
+		g_texture_cache->InvalidateContainedTargets(FRAME_TEX0.TBP0, FRAME_TEX0.TBW, FRAME_TEX0.PSM, m_r);
+	if (ds && !preserve_depth && m_r.rintersect(rt->m_valid).eq(ds->m_valid))
+		g_texture_cache->InvalidateContainedTargets(ZBUF_TEX0.TBP0, ZBUF_TEX0.TBW, ZBUF_TEX0.PSM, m_r);
+
 	if (src && src->m_shared_texture && src->m_texture != src->m_from_target->m_texture)
 	{
 		// Target texture changed, update reference.

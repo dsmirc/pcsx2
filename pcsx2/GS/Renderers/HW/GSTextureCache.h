@@ -475,6 +475,7 @@ public:
 	void InvalidateVideoMemSubTarget(GSTextureCache::Target* rt);
 	void InvalidateVideoMem(const GSOffset& off, const GSVector4i& r, bool target = true);
 	void InvalidateLocalMem(const GSOffset& off, const GSVector4i& r, bool full_flush = false);
+	void InvalidateContainedTargets(u32 bp, u32 bw, u32 psm, const GSVector4i& r);
 
 	/// Removes any sources which point to the specified target.
 	void InvalidateSourcesFromTarget(const Target* t);

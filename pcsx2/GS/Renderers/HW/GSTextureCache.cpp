@@ -975,7 +975,7 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 					// PSM equality needed because CreateSource does not handle PSM conversion.
 					// Only inclusive hit to limit false hits.
 
-					if (bp > t->m_TEX0.TBP0)
+					if (bp > t->m_TEX0.TBP0 && (GSConfig.UserHacks_TextureInsideRt < GSTextureInRtMode::MergeTargets || t->m_TEX0.TBW == bw))
 					{
 						// Check if it is possible to hit with valid <x,y> offset on the given Target.
 						// Fixes Jak eyes rendering.
@@ -1145,7 +1145,7 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 			}
 		}
 
-		if (tex_merge_rt)
+		if (tex_merge_rt || (dst && dst->m_TEX0.TBW != bw && GSConfig.UserHacks_TextureInsideRt >= GSTextureInRtMode::MergeTargets))
 			src = CreateMergedSource(TEX0, TEXA, region, dst->m_scale);
 	}
 
@@ -1367,6 +1367,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 			// And invalidate the target, we're drawing over it so we don't care what's there.
 			GL_INS("TC: Invalidating target %s[%x] because it's completely overwritten.", to_string(type), dst->m_TEX0.TBP0);
 			g_gs_device->InvalidateRenderTarget(dst->m_texture);
+			InvalidateContainedTargets(dst->m_TEX0.TBP0, dst->m_TEX0.TBW, dst->m_TEX0.PSM, draw_rect);
 		}
 	}
 	else if (!is_frame && !GSConfig.UserHacks_DisableDepthSupport)
@@ -1629,6 +1630,8 @@ GSTextureCache::Target* GSTextureCache::CreateTarget(GIFRegTEX0 TEX0, const GSVe
 		dst->m_valid_alpha = false;
 
 	dst->readbacks_since_draw = 0;
+
+	InvalidateContainedTargets(dst->m_TEX0.TBP0, dst->m_TEX0.TBW, dst->m_TEX0.PSM, draw_rect);
 
 	assert(dst && dst->m_texture && dst->m_scale == scale);
 	return dst;
@@ -2719,6 +2722,32 @@ void GSTextureCache::InvalidateLocalMem(const GSOffset& off, const GSVector4i& r
 				if (exact_bp)
 					return;
 			}
+		}
+	}
+}
+
+void GSTextureCache::InvalidateContainedTargets(u32 bp, u32 bw, u32 psm, const GSVector4i& r)
+{
+	const u32 start_block = GSLocalMemory::GetStartBlockAddress(bp, bw, psm, r);
+	const u32 end_block = GSLocalMemory::GetEndBlockAddress(bp, bw, psm, r);
+	for (int type = 0; type < 2; type++)
+	{
+		auto& list = m_dst[type];
+		for (auto it = list.begin(); it != list.end();)
+		{
+			Target* tgt = *it;
+			if (tgt->m_TEX0.TBP0 <= bp || tgt->m_end_block > end_block || !GSUtil::HasCompatibleBits(psm, tgt->m_TEX0.PSM))
+			{
+				++it;
+				continue;
+			}
+
+			GL_CACHE("TC: Remove %s target %x BW %u PSM %s because it's contained", to_string(type),
+				tgt->m_TEX0.TBP0, tgt->m_TEX0.TBW, psm_str(tgt->m_TEX0.PSM));
+
+			InvalidateSourcesFromTarget(tgt);
+			it = list.erase(it);
+			delete tgt;
 		}
 	}
 }
