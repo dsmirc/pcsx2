@@ -16716,12 +16716,16 @@ SLES-53196:
   name: "Destroy All Humans!"
   region: "PAL-M4"
   gsHWFixes:
-    mipmap: 1
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
+    textureInsideRT: 2 # Fixes shadow maps.
 SLES-53197:
   name: "Destroy All Humans!"
   region: "PAL-G"
   gsHWFixes:
-    mipmap: 1
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
+    textureInsideRT: 2 # Fixes shadow maps.
 SLES-53199:
   name: "25 to Life"
   region: "PAL-E"
@@ -17882,7 +17886,9 @@ SLES-53641:
   name: "Destroy All Humans!"
   region: "PAL-R"
   gsHWFixes:
-    mipmap: 1
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
+    textureInsideRT: 2 # Fixes shadow maps.
 SLES-53644:
   name: "Gene Troopers"
   region: "PAL-M5"
@@ -32687,7 +32693,9 @@ SLPM-66430:
   name: "Destroy All Humans!"
   region: "NTSC-J"
   gsHWFixes:
-    mipmap: 1
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
+    textureInsideRT: 2 # Fixes shadow maps.
 SLPM-66431:
   name: "WinBack 2 - Project Poseidon"
   region: "NTSC-J"
@@ -45106,7 +45114,9 @@ SLUS-20945:
   region: "NTSC-U"
   compat: 5
   gsHWFixes:
-    mipmap: 1
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
+    textureInsideRT: 2 # Fixes shadow maps.
 SLUS-20946:
   name: "Grand Theft Auto - San Andreas"
   region: "NTSC-U"
@@ -50785,7 +50795,9 @@ SLUS-29150:
   name: "Destroy All Humans! [Demo]"
   region: "NTSC-U"
   gsHWFixes:
-    mipmap: 1
+    mipmap: 2 # Mipmap + trilinear, improves ground textures to match sw renderer.
+    trilinearFiltering: 1
+    textureInsideRT: 2 # Fixes shadow maps.
 SLUS-29152:
   name: "Battlefield 2 - Modern Combat [Regular Demo]"
   region: "NTSC-U"

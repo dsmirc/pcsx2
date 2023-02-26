@@ -647,7 +647,7 @@ void Pcsx2Config::GSOptions::LoadSave(SettingsWrapper& wrap)
 	GSSettingBoolEx(UserHacks_DisableSafeFeatures, "UserHacks_Disable_Safe_Features");
 	GSSettingBoolEx(UserHacks_MergePPSprite, "UserHacks_merge_pp_sprite");
 	GSSettingBoolEx(UserHacks_WildHack, "UserHacks_WildHack");
-	GSSettingBoolEx(UserHacks_TextureInsideRt, "UserHacks_TextureInsideRt");
+	GSSettingIntEnumEx(UserHacks_TextureInsideRt, "UserHacks_TextureInsideRt");
 	GSSettingBoolEx(UserHacks_TargetPartialInvalidation, "UserHacks_TargetPartialInvalidation");
 	GSSettingBoolEx(FXAA, "fxaa");
 	GSSettingBool(ShadeBoost);
@@ -774,7 +774,7 @@ void Pcsx2Config::GSOptions::MaskUserHacks()
 	UserHacks_DisableDepthSupport = false;
 	UserHacks_CPUFBConversion = false;
 	UserHacks_ReadTCOnClose = false;
-	UserHacks_TextureInsideRt = false;
+	UserHacks_TextureInsideRt = GSTextureInRtMode::Disabled;
 	UserHacks_TargetPartialInvalidation = false;
 	UserHacks_TCOffsetX = 0;
 	UserHacks_TCOffsetY = 0;
