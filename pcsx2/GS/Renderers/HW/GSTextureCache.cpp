@@ -61,6 +61,23 @@ void GSTextureCache::ReadbackAll()
 	}
 }
 
+void GSTextureCache::RemoveTargetsInRange(u32 start_bp, u32 end_bp)
+{
+	for (int type = 0; type < 2; type++)
+	{
+		for (auto it = m_dst[type].begin(); it != m_dst[type].end();)
+		{
+			auto eit = it++;
+			Target* tgt = *eit;
+			if (tgt->m_TEX0.TBP0 >= start_bp && tgt->UnwrappedEndBlock() < end_bp)
+			{
+				m_dst[type].erase(eit);
+				delete tgt;
+			}
+		}
+	}
+}
+
 void GSTextureCache::RemoveAll()
 {
 	m_src.RemoveAll();
@@ -457,7 +474,7 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 					// PSM equality needed because CreateSource does not handle PSM conversion.
 					// Only inclusive hit to limit false hits.
 
-					if (bp >= t->m_TEX0.TBP0)
+					if (bp >= t->m_TEX0.TBP0 && (GSConfig.UserHacks_TextureInsideRt < GSTextureInRtMode::MergeTargets || t->m_TEX0.TBW == bw))
 					{
 						// Check if it is possible to hit with valid <x,y> offset on the given Target.
 						// Fixes Jak eyes rendering.
@@ -576,8 +593,10 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 			}
 		}
 
-		if (tex_merge_rt)
+		if (tex_merge_rt || (dst && dst->m_TEX0.TBW != bw && GSConfig.UserHacks_TextureInsideRt >= GSTextureInRtMode::MergeTargets))
+		{
 			src = CreateMergedSource(TEX0, TEXA, region, dst->m_texture->GetScale());
+		}
 	}
 
 	if (!src)
@@ -2638,6 +2657,7 @@ GSTextureCache::Source* GSTextureCache::CreateMergedSource(GIFRegTEX0 TEX0, GIFR
 					sok.elems[1].bw = t->m_TEX0.TBW;
 					sok.elems[1].psm = t->m_TEX0.PSM;
 					sok.elems[1].rect = t->m_valid;
+					sok.elems[1].rect = GSVector4i(0, 0, t->m_texture->GetWidth() / t->m_texture->GetScale().x, t->m_texture->GetHeight() / t->m_texture->GetScale().y);
 					so = ComputeSurfaceOffset(sok);
 					if (!so.is_valid)
 						goto next_page;
@@ -2645,7 +2665,8 @@ GSTextureCache::Source* GSTextureCache::CreateMergedSource(GIFRegTEX0 TEX0, GIFR
 				else
 				{
 					so.is_valid = true;
-					so.b2a_offset = src_rect.rintersect(t->m_valid);
+					//so.b2a_offset = src_rect.rintersect(t->m_valid);
+					so.b2a_offset = src_rect.rintersect(GSVector4i(0, 0, t->m_texture->GetWidth() / t->m_texture->GetScale().x, t->m_texture->GetHeight() / t->m_texture->GetScale().y));
 				}
 
 				// Adjust to what the target actually has.

@@ -2102,6 +2102,12 @@ void GSRendererHW::Draw()
 	if (rt)
 		m_tc->Read(rt, m_r);
 #endif
+
+	if (context->FRAME.FBP == 0 && context->ZBUF.Block() == 0x1a40)
+	{
+		// :face_vomiting: :face_vomiting: :face_vomiting:
+		m_tc->RemoveTargetsInRange(0x8c0, 0x2300 + 0x8c0);
+	}
 }
 
 /// Verifies assumptions we expect to hold about indices

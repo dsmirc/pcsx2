@@ -410,6 +410,7 @@ public:
 	void Read(Source* t, const GSVector4i& r);
 	void RemoveAll();
 	void ReadbackAll();
+	void RemoveTargetsInRange(u32 start_bp, u32 end_bp);
 	void AddDirtyRectTarget(Target* target, GSVector4i rect, u32 psm, u32 bw, RGBAMask rgba);
 
 	GSTexture* LookupPaletteSource(u32 CBP, u32 CPSM, u32 CBW, GSVector2i& offset, const GSVector2i& size);
