@@ -859,6 +859,9 @@ public:
 	/// Converts a colour format to an indexed format texture.
 	virtual void ConvertToIndexedTexture(GSTexture* sTex, float sScale, u32 offsetX, u32 offsetY, u32 SBW, u32 SPSM, GSTexture* dTex, u32 DBW, u32 DPSM) {}
 
+	/// Converts a colour format to an indexed format texture.
+	virtual void ConvertToIndexedTexture(GSTexture* sTex, u32 offsetX, u32 offsetY, u32 SBW, u32 SPSM, GSTexture* dTex, u32 DBW, u32 DPSM) {}
+
 	virtual void RenderHW(GSHWDrawConfig& config) {}
 
 	__fi FeatureSupport Features() const { return m_features; }

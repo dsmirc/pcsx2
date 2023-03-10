@@ -3357,7 +3357,7 @@ static bool UsesRegionRepeat(int fix, int msk, int min, int max, int* min_out, i
 	return sets_bits || clears_bits;
 }
 
-GSState::TextureMinMaxResult GSState::GetTextureMinMax(const GIFRegTEX0& TEX0, const GIFRegCLAMP& CLAMP, bool linear)
+GSState::TextureMinMaxResult GSState::GetTextureMinMax(GIFRegTEX0 TEX0, GIFRegCLAMP CLAMP, bool linear, bool clamp_to_tsize)
 {
 	// TODO: some of the +1s can be removed if linear == false
 
@@ -3366,21 +3366,18 @@ GSState::TextureMinMaxResult GSState::GetTextureMinMax(const GIFRegTEX0& TEX0, c
 
 	const int w = 1 << tw;
 	const int h = 1 << th;
-	const int tw_mask = w - 1;
-	const int th_mask = h - 1;
+	const int tw_mask = (1 << tw) - 1;
+	const int th_mask = (1 << th) - 1;
 
-	const GSVector4i tr(0, 0, w, h);
+	GSVector4i tr(0, 0, w, h);
 
 	const int wms = CLAMP.WMS;
 	const int wmt = CLAMP.WMT;
 
 	const int minu = (int)CLAMP.MINU;
 	const int minv = (int)CLAMP.MINV;
-
-	// For the FixedTEX0 case, in hardware, we handle this in the texture cache. Don't OR the bits in here, otherwise
-	// we'll end up with an invalid rectangle, we want the passed-in rectangle to be relative to the normalized size.
-	const int maxu = (wms != CLAMP_REGION_REPEAT || (int)CLAMP.MAXU < w) ? (int)CLAMP.MAXU : 0;
-	const int maxv = (wmt != CLAMP_REGION_REPEAT || (int)CLAMP.MAXV < h) ? (int)CLAMP.MAXV : 0;
+	const int maxu = (int)CLAMP.MAXU;
+	const int maxv = (int)CLAMP.MAXV;
 
 	GSVector4i vr = tr;
 
@@ -3391,10 +3388,8 @@ GSState::TextureMinMaxResult GSState::GetTextureMinMax(const GIFRegTEX0& TEX0, c
 		case CLAMP_CLAMP:
 			break;
 		case CLAMP_REGION_CLAMP:
-			if (vr.x < minu)
-				vr.x = minu;
-			if (vr.z > maxu + 1)
-				vr.z = maxu + 1;
+			vr.x = minu;
+			vr.z = maxu + 1;
 			break;
 		case CLAMP_REGION_REPEAT:
 			vr.x = maxu;
@@ -3411,10 +3406,8 @@ GSState::TextureMinMaxResult GSState::GetTextureMinMax(const GIFRegTEX0& TEX0, c
 		case CLAMP_CLAMP:
 			break;
 		case CLAMP_REGION_CLAMP:
-			if (vr.y < minv)
-				vr.y = minv;
-			if (vr.w > maxv + 1)
-				vr.w = maxv + 1;
+			vr.y = minv;
+			vr.w = maxv + 1;
 			break;
 		case CLAMP_REGION_REPEAT:
 			vr.y = maxv;
@@ -3423,6 +3416,13 @@ GSState::TextureMinMaxResult GSState::GetTextureMinMax(const GIFRegTEX0& TEX0, c
 		default:
 			__assume(0);
 	}
+
+	// Software renderer fixes TEX0 so that TW/TH contain MAXU/MAXV.
+	// Hardware renderer doesn't, and handles it in the texture cache, so don't clamp here.
+	if (clamp_to_tsize)
+		vr = vr.rintersect(tr);
+	else
+		tr = tr.runion(vr);
 
 	u8 uses_border = 0;
 
