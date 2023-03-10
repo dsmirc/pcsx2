@@ -810,7 +810,7 @@ bool GSHwHack::OI_PointListPalette(GSRendererHW& r, GSTexture* rt, GSTexture* ds
 			const u32 c = vi.RGBAQ.U32[0];
 			r.m_mem.WritePixel32(x, y, c, FBP, FBW);
 		}
-		r.m_tc->InvalidateVideoMem(r.m_context->offset.fb, r.m_r);
+		g_texture_cache->InvalidateVideoMem(r.m_context->offset.fb, r.m_r);
 		return false;
 	}
 	return true;
@@ -981,7 +981,7 @@ bool GSHwHack::OI_RozenMaidenGebetGarden(GSRendererHW& r, GSTexture* rt, GSTextu
 			TEX0.TBW = RCONTEXT->FRAME.FBW;
 			TEX0.PSM = RCONTEXT->FRAME.PSM;
 
-			if (GSTextureCache::Target* tmp_rt = r.m_tc->LookupTarget(TEX0, r.GetTargetSize(), r.GetTextureScaleFactor(), GSTextureCache::RenderTarget, true))
+			if (GSTextureCache::Target* tmp_rt = g_texture_cache->LookupTarget(TEX0, r.GetTargetSize(), r.GetTextureScaleFactor(), GSTextureCache::RenderTarget, true))
 			{
 				GL_INS("OI_RozenMaidenGebetGarden FB clear");
 				g_gs_device->ClearRenderTarget(tmp_rt->m_texture, 0);
@@ -999,7 +999,7 @@ bool GSHwHack::OI_RozenMaidenGebetGarden(GSRendererHW& r, GSTexture* rt, GSTextu
 			TEX0.TBW = RCONTEXT->FRAME.FBW;
 			TEX0.PSM = RCONTEXT->ZBUF.PSM;
 
-			if (GSTextureCache::Target* tmp_ds = r.m_tc->LookupTarget(TEX0, r.GetTargetSize(), r.GetTextureScaleFactor(), GSTextureCache::DepthStencil, true))
+			if (GSTextureCache::Target* tmp_ds = g_texture_cache->LookupTarget(TEX0, r.GetTargetSize(), r.GetTextureScaleFactor(), GSTextureCache::DepthStencil, true))
 			{
 				GL_INS("OI_RozenMaidenGebetGarden ZB clear");
 				g_gs_device->ClearDepth(tmp_ds->m_texture);
@@ -1032,7 +1032,7 @@ bool GSHwHack::OI_SonicUnleashed(GSRendererHW& r, GSTexture* rt, GSTexture* ds, 
 
 	GL_INS("OI_SonicUnleashed replace draw by a copy");
 
-	GSTextureCache::Target* src = r.m_tc->LookupTarget(Texture, GSVector2i(1, 1), r.GetTextureScaleFactor(), GSTextureCache::RenderTarget, true);
+	GSTextureCache::Target* src = g_texture_cache->LookupTarget(Texture, GSVector2i(1, 1), r.GetTextureScaleFactor(), GSTextureCache::RenderTarget, true);
 
 	const GSVector2i src_size(src->m_texture->GetSize());
 	GSVector2i rt_size(rt->GetSize());
@@ -1040,7 +1040,7 @@ bool GSHwHack::OI_SonicUnleashed(GSRendererHW& r, GSTexture* rt, GSTexture* ds, 
 	// This is awful, but so is the CRC hack... it's a texture shuffle split horizontally instead of vertically.
 	if (rt_size.x < src_size.x || rt_size.y < src_size.y)
 	{
-		GSTextureCache::Target* rt_again = r.m_tc->LookupTarget(Frame, src_size, src->m_scale, GSTextureCache::RenderTarget, true);
+		GSTextureCache::Target* rt_again = g_texture_cache->LookupTarget(Frame, src_size, src->m_scale, GSTextureCache::RenderTarget, true);
 		if (rt_again->m_unscaled_size.x < src->m_unscaled_size.x || rt_again->m_unscaled_size.y < src->m_unscaled_size.y)
 		{
 			rt_again->ResizeTexture(std::max(rt_again->m_unscaled_size.x, src->m_unscaled_size.x),
@@ -1136,7 +1136,7 @@ bool GSHwHack::GSC_Battlefield2(GSRendererHW& r, const GSFrameInfo& fi, int& ski
 			GIFRegTEX0 TEX0 = {};
 			TEX0.TBP0 = fi.FBP;
 			TEX0.TBW = 8;
-			GSTextureCache::Target* dst = r.m_tc->LookupTarget(TEX0, r.GetTargetSize(), r.GetTextureScaleFactor(), GSTextureCache::DepthStencil, true);
+			GSTextureCache::Target* dst = g_texture_cache->LookupTarget(TEX0, r.GetTargetSize(), r.GetTextureScaleFactor(), GSTextureCache::DepthStencil, true);
 			if (dst)
 			{
 				g_gs_device->ClearDepth(dst->m_texture);
@@ -1158,7 +1158,7 @@ bool GSHwHack::OI_Battlefield2(GSRendererHW& r, GSTexture* rt, GSTexture* ds, GS
 		g_gs_device->CopyRect(t->m_texture, rt, rc, 0, 0);
 	}
 
-	r.m_tc->InvalidateTemporarySource();
+	g_texture_cache->InvalidateTemporarySource();
 	return false;
 }
 

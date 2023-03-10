@@ -100,7 +100,6 @@ private:
 	bool IsSplitTextureShuffle();
 	GSVector4i GetSplitTextureShuffleDrawRect() const;
 
-	GSTextureCache* m_tc;
 	GSVector4i m_r = {};
 	GSTextureCache::Source* m_src = nullptr;
 
@@ -142,7 +141,6 @@ public:
 	virtual ~GSRendererHW() override;
 
 	__fi static GSRendererHW* GetInstance() { return static_cast<GSRendererHW*>(g_gs_renderer.get()); }
-	__fi GSTextureCache* GetTextureCache() const { return m_tc; }
 
 	void Destroy() override;
 

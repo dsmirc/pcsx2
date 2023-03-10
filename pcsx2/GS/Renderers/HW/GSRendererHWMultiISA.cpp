@@ -554,7 +554,7 @@ bool GSRendererHWFunctions::SwPrimRender(GSRendererHW& hw, bool invalidate_tc)
 	static_cast<GSSingleRasterizer*>(hw.m_sw_rasterizer.get())->Draw(data);
 
 	if (invalidate_tc)
-		hw.m_tc->InvalidateVideoMem(context->offset.fb, bbox);
+		g_texture_cache->InvalidateVideoMem(context->offset.fb, bbox);
 
 	return true;
 }

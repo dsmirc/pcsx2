@@ -31,6 +31,8 @@
 #include <malloc.h>
 #endif
 
+std::unique_ptr<GSTextureCache> g_texture_cache;
+
 static u8* s_unswizzle_buffer;
 
 GSTextureCache::GSTextureCache()
@@ -3954,7 +3956,7 @@ GSTextureCache::Source::~Source()
 	// to recycle.
 	if (!m_shared_texture && !m_from_hash_cache && m_texture)
 	{
-		GSRendererHW::GetInstance()->GetTextureCache()->m_source_memory_usage -= m_texture->GetMemUsage();
+		g_texture_cache->m_source_memory_usage -= m_texture->GetMemUsage();
 		g_gs_device->Recycle(m_texture);
 	}
 }
@@ -4233,7 +4235,7 @@ GSTextureCache::Target::~Target()
 	pxAssert(!m_shared_texture);
 	if (m_texture)
 	{
-		GSRendererHW::GetInstance()->GetTextureCache()->m_target_memory_usage -= m_texture->GetMemUsage();
+		g_texture_cache->m_target_memory_usage -= m_texture->GetMemUsage();
 		g_gs_device->Recycle(m_texture);
 	}
 }
@@ -4482,8 +4484,7 @@ bool GSTextureCache::Target::ResizeTexture(int new_unscaled_width, int new_unsca
 		g_gs_device->CopyRect(m_texture, tex, rc, 0, 0);
 	}
 
-	GSTextureCache* tc = GSRendererHW::GetInstance()->GetTextureCache();
-	tc->m_target_memory_usage = (tc->m_target_memory_usage - m_texture->GetMemUsage()) + tex->GetMemUsage();
+	g_texture_cache->m_target_memory_usage = (g_texture_cache->m_target_memory_usage - m_texture->GetMemUsage()) + tex->GetMemUsage();
 
 	if (recycle_old)
 		g_gs_device->Recycle(m_texture);
@@ -4810,7 +4811,7 @@ GSTextureCache::Palette::~Palette()
 {
 	if (m_tex_palette)
 	{
-		GSRendererHW::GetInstance()->GetTextureCache()->m_source_memory_usage -= m_tex_palette->GetMemUsage();
+		g_texture_cache->m_source_memory_usage -= m_tex_palette->GetMemUsage();
 		g_gs_device->Recycle(m_tex_palette);
 	}
 
@@ -4838,7 +4839,7 @@ void GSTextureCache::Palette::InitializeTexture()
 		// and therefore will read texel 15/255 * texture size).
 		m_tex_palette = g_gs_device->CreateTexture(m_pal, 1, 1, GSTexture::Format::Color);
 		m_tex_palette->Update(GSVector4i(0, 0, m_pal, 1), m_clut, m_pal * sizeof(m_clut[0]));
-		GSRendererHW::GetInstance()->GetTextureCache()->m_source_memory_usage += m_tex_palette->GetMemUsage();
+		g_texture_cache->m_source_memory_usage += m_tex_palette->GetMemUsage();
 	}
 }
 
