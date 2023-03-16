@@ -296,7 +296,6 @@ struct alignas(16) GSHWDrawConfig
 		{
 			struct
 			{
-				// *** Word 1
 				// Format
 				u32 aem_fmt   : 2;
 				u32 pal_fmt   : 2;
@@ -328,9 +327,6 @@ struct alignas(16) GSHWDrawConfig
 				u32 write_rg : 1;
 				u32 fbmask   : 1;
 
-				//u32 _free1:0;
-
-				// *** Word 2
 				// Blend and Colclip
 				u32 blend_a     : 2;
 				u32 blend_b     : 2;
@@ -366,6 +362,7 @@ struct alignas(16) GSHWDrawConfig
 				u32 automatic_lod : 1;
 				u32 manual_lod : 1;
 				u32 point_sampler : 1;
+				u32 region_rect : 1;
 
 				// Scan mask
 				u32 scanmsk : 2;

@@ -1551,6 +1551,20 @@ void GSTextureCache::InvalidateVideoMemType(int type, u32 bp)
 				t->m_texture ? t->m_texture->GetID() : 0,
 				t->m_TEX0.TBP0);
 
+			// Need to also remove any sources which reference this target.
+			for (auto it = m_src.m_surfaces.begin(); it != m_src.m_surfaces.end();)
+			{
+				if ((*it)->m_from_target == t)
+				{
+					GL_CACHE("TC: Removing source at %x referencing target", (*it)->m_TEX0.TBP0);
+					it = m_src.m_surfaces.erase(it);
+				}
+				else
+				{
+					++it;
+				}
+			}
+
 			list.erase(i);
 			delete t;
 
@@ -2837,21 +2851,38 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 
 		// if we have a source larger than the target (from tex-in-rt), we need to clear it, otherwise we'll read junk
 		const bool outside_target = ((x + w) > dst->m_texture->GetWidth() || (y + h) > dst->m_texture->GetHeight());
-		GSTexture* sTex = dst->m_texture;
-		GSTexture* dTex = outside_target ?
-							  g_gs_device->CreateRenderTarget(w, h, GSTexture::Format::Color, true) :
-							  g_gs_device->CreateTexture(w, h, tlevels, GSTexture::Format::Color, true);
-		m_source_memory_usage += dTex->GetMemUsage();
+		if (dst->m_TEX0.TBP0 == GSRendererHW::GetInstance()->m_context->FRAME.Block() ||
+			dst->m_TEX0.TBP0 == GSRendererHW::GetInstance()->m_context->ZBUF.Block())
+		{
+			GSTexture* sTex = dst->m_texture;
+			GSTexture* dTex = outside_target ?
+									g_gs_device->CreateRenderTarget(w, h, GSTexture::Format::Color, true) :
+									g_gs_device->CreateTexture(w, h, tlevels, GSTexture::Format::Color, true);
+			m_source_memory_usage += dTex->GetMemUsage();
 
-		// copy the rt in
-		const GSVector4i area(GSVector4i(x, y, x + w, y + h).rintersect(GSVector4i(sTex->GetSize()).zwxy()));
-		if (!area.rempty())
-			g_gs_device->CopyRect(sTex, dTex, area, 0, 0);
+			// copy the rt in
+			const GSVector4i area(GSVector4i(x, y, x + w, y + h).rintersect(GSVector4i(sTex->GetSize()).zwxy()));
+			if (!area.rempty())
+				g_gs_device->CopyRect(sTex, dTex, area, 0, 0);
+
+			src->m_texture = dTex;
+			src->m_unscaled_size = GSVector2i(tw, th);
+		}
+		else
+		{
+			GL_CACHE("TC: Sample offset (%d,%d) reduced region directly from target: %dx%d -> %dx%d",
+				dst->m_texture->GetWidth(), x_offset, y_offset, dst->m_texture->GetHeight(), w, h);
+
+			src->m_region.SetX(x_offset, x_offset + tw);
+			src->m_region.SetY(y_offset, y_offset + th);
+			src->m_texture = dst->m_texture;
+			src->m_unscaled_size = dst->m_unscaled_size;
+			src->m_shared_texture = true;
+			m_temporary_source = src;
+		}
 
 		// Keep a trace of origin of the texture
-		src->m_texture = dTex;
 		src->m_scale = scale;
-		src->m_unscaled_size = GSVector2i(tw, th);
 		src->m_end_block = dst->m_end_block;
 		src->m_target = true;
 		src->m_from_target = &dst->m_texture;
@@ -3061,12 +3092,12 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 		// Create a cleared RT if we somehow end up with an empty source rect (because the RT isn't large enough).
 		const bool source_rect_empty = sRect.rempty();
 		const bool use_texture = (shader == ShaderConvert::COPY && !source_rect_empty);
+		const GSVector2i dst_texture_size = dst->m_texture->GetSize();
 
 		// Assuming everything matches up, instead of copying the target, we can just sample it directly.
 		// It's the same as doing the copy first, except we save GPU time.
 		if (!half_right && // not the size change from above
 			use_texture && // not reinterpreting the RT
-			new_size == dst->m_texture->GetSize() && // same dimensions
 			!m_temporary_source // not the shuffle case above
 			)
 		{
@@ -3081,6 +3112,18 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 			src->m_32_bits_fmt = dst->m_32_bits_fmt;
 			src->m_valid_rect = dst->m_valid;
 			src->m_end_block = dst->m_end_block;
+
+			// if the size doesn't match, we need to engage shader sampling.
+			if (new_size != dst_texture_size)
+			{
+				GL_CACHE("TC: Sample reduced region directly from target: %dx%d -> %dx%d", dst_texture_size.x,
+					dst_texture_size.y, new_size.x, new_size.y);
+
+				if (new_size.x != dst_texture_size.x)
+					src->m_region.SetX(0, tw);
+				if (new_size.y != dst_texture_size.y)
+					src->m_region.SetY(0, th);
+			}
 
 			// For now, we have to kill the copy immediately. If we leave it here, we might try to use it
 			// later on when FRAME == TEX0, which is unsafe. Once we fix hazards, it can go.
@@ -4966,6 +5009,11 @@ bool GSTextureCache::SourceRegion::IsFixedTEX0W(int tw) const
 bool GSTextureCache::SourceRegion::IsFixedTEX0H(int th) const
 {
 	return (GetMaxY() > static_cast<u32>(th));
+}
+
+GSVector2i GSTextureCache::SourceRegion::GetSize(int tw, int th) const
+{
+	return GSVector2i(HasX() ? GetWidth() : tw, HasY() ? GetHeight() : th);
 }
 
 GSVector4i GSTextureCache::SourceRegion::GetRect(int tw, int th) const

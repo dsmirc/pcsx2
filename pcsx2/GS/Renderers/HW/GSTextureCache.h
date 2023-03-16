@@ -69,6 +69,9 @@ public:
 		bool IsFixedTEX0W(int tw) const;
 		bool IsFixedTEX0H(int th) const;
 
+		/// Returns the size that the region occupies.
+		GSVector2i GetSize(int tw, int th) const;
+
 		/// Returns the rectangle relative to the texture base pointer that the region occupies.
 		GSVector4i GetRect(int tw, int th) const;
 
@@ -243,6 +246,9 @@ public:
 		virtual ~Source();
 
 		__fi bool CanPreload() const { return CanPreloadTextureSize(m_TEX0.TW, m_TEX0.TH); }
+
+		__fi GSVector2i GetRegionSize() const { return m_region.GetSize(m_unscaled_size.x, m_unscaled_size.y); }
+		__fi GSVector4i GetRegionRect() const { return m_region.GetRect(m_unscaled_size.x, m_unscaled_size.y); }
 
 		void SetPages();
 

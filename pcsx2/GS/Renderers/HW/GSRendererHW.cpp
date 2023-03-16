@@ -1923,7 +1923,8 @@ void GSRendererHW::Draw()
 		// If m_src is from a target that isn't the same size as the texture, texture sample edge modes won't work quite the same way
 		// If the game actually tries to access stuff outside of the rendered target, it was going to get garbage anyways so whatever
 		// But the game could issue reads that wrap to valid areas, so move wrapping to the shader if wrapping is used
-		const GSVector2i unscaled_size = m_src->GetUnscaledSize();
+		const GSVector2i unscaled_size = m_src->m_target ? m_src->GetRegionSize() : m_src->GetUnscaledSize();
+
 		if (!is_shuffle && m_context->CLAMP.WMS == CLAMP_REPEAT && (tmm.uses_boundary & TextureMinMaxResult::USES_BOUNDARY_U) && unscaled_size.x != tw)
 		{
 			// Our shader-emulated region repeat doesn't upscale :(
@@ -3493,20 +3494,22 @@ void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Source* tex)
 	// Redundant clamp tests are restricted to local memory/1x sources only, if we're from a target,
 	// we keep the shader clamp. See #5851 on github, and the note in Draw().
 	[[maybe_unused]] static constexpr const char* clamp_modes[] = {"REPEAT", "CLAMP", "REGION_CLAMP", "REGION_REPEAT"};
-	const bool redundant_wms = !tex->m_target && IsRedundantClamp(m_context->CLAMP.WMS, m_context->CLAMP.MINU,
+	const bool target_region = tex->m_target && tex->m_region.HasEither();
+	const bool redundant_wms = IsRedundantClamp(m_context->CLAMP.WMS, m_context->CLAMP.MINU,
 													 m_context->CLAMP.MAXU, tex->m_TEX0.TW);
-	const bool redundant_wmt = !tex->m_target && IsRedundantClamp(m_context->CLAMP.WMT, m_context->CLAMP.MINV,
+	const bool redundant_wmt = IsRedundantClamp(m_context->CLAMP.WMT, m_context->CLAMP.MINV,
 													 m_context->CLAMP.MAXV, tex->m_TEX0.TH);
-	const u8 wms = EffectiveClamp(m_context->CLAMP.WMS, tex->m_region.HasX() || redundant_wms);
-	const u8 wmt = EffectiveClamp(m_context->CLAMP.WMT, tex->m_region.HasY() || redundant_wmt);
-	const bool complex_wms_wmt = !!((wms | wmt) & 2);
-	GL_CACHE("WMS: %s [%s%s] WMT: %s [%s%s] Complex: %d MINU: %d MAXU: %d MINV: %d MAXV: %d",
+	const u8 wms = EffectiveClamp(m_context->CLAMP.WMS, !tex->m_target && (tex->m_region.HasX() || redundant_wms));
+	const u8 wmt = EffectiveClamp(m_context->CLAMP.WMT, !tex->m_target && (tex->m_region.HasY() || redundant_wmt));
+	const bool complex_wms_wmt = !!((wms | wmt) & 2) || target_region;
+	GL_CACHE("WMS: %s [%s%s] WMT: %s [%s%s] Complex: %d TargetRegion: %d MINU: %d MAXU: %d MINV: %d MAXV: %d",
 		clamp_modes[m_context->CLAMP.WMS], redundant_wms ? "redundant," : "", clamp_modes[wms],
 		clamp_modes[m_context->CLAMP.WMT], redundant_wmt ? "redundant," : "", clamp_modes[wmt],
-		complex_wms_wmt, m_context->CLAMP.MINU, m_context->CLAMP.MAXU, m_context->CLAMP.MINV, m_context->CLAMP.MAXV);
+		complex_wms_wmt, target_region,
+		m_context->CLAMP.MINU, m_context->CLAMP.MAXU, m_context->CLAMP.MINV, m_context->CLAMP.MAXV);
 
 	const bool need_mipmap = IsMipMapDraw();
-	const bool shader_emulated_sampler = tex->m_palette || cpsm.fmt != 0 || complex_wms_wmt || psm.depth;
+	const bool shader_emulated_sampler = tex->m_palette || cpsm.fmt != 0 || complex_wms_wmt || psm.depth || target_region;
 	const bool trilinear_manual = need_mipmap && GSConfig.HWMipmap == HWMipmapLevel::Full;
 
 	bool bilinear = m_vt.IsLinear();
@@ -3542,8 +3545,8 @@ void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Source* tex)
 	}
 
 	// 1 and 0 are equivalent
-	m_conf.ps.wms = (wms & 2) ? wms : 0;
-	m_conf.ps.wmt = (wmt & 2) ? wmt : 0;
+	m_conf.ps.wms = (wms & 2 || target_region) ? wms : 0;
+	m_conf.ps.wmt = (wmt & 2 || target_region) ? wmt : 0;
 
 	// Depth + bilinear filtering isn't done yet (And I'm not sure we need it anyway but a game will prove me wrong)
 	// So of course, GTA set the linear mode, but sampling is done at texel center so it is equivalent to nearest sampling
@@ -3664,10 +3667,9 @@ void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Source* tex)
 	m_conf.ps.tcc = m_context->TEX0.TCC;
 
 	m_conf.ps.ltf = bilinear && shader_emulated_sampler;
-	m_conf.ps.point_sampler = g_gs_device->Features().broken_point_sampler && (!bilinear || shader_emulated_sampler);
+	m_conf.ps.point_sampler = g_gs_device->Features().broken_point_sampler && !target_region && (!bilinear || shader_emulated_sampler);
 
 	const float scale = tex->GetScale();
-	const GSVector2i unscaled_size = tex->GetUnscaledSize();
 
 	const int tw = static_cast<int>(1 << m_context->TEX0.TW);
 	const int th = static_cast<int>(1 << m_context->TEX0.TH);
@@ -3677,20 +3679,31 @@ void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Source* tex)
 	const GSVector4 WH(static_cast<float>(tw), static_cast<float>(th), miptw * scale, mipth * scale);
 
 	// Reduction factor when source is a target and smaller/larger than TW/TH.
+	const GSVector2i unscaled_size = target_region ? tex->GetRegionSize() : tex->GetUnscaledSize();
 	m_conf.cb_ps.STScale = GSVector2(static_cast<float>(miptw) / static_cast<float>(unscaled_size.x),
 		static_cast<float>(mipth) / static_cast<float>(unscaled_size.y));
 
-	if (tex->m_region.HasX())
+	if (target_region)
 	{
-		m_conf.cb_ps.STRange.x = static_cast<float>(tex->m_region.GetMinX()) / static_cast<float>(miptw);
-		m_conf.cb_ps.STRange.z = static_cast<float>(miptw) / static_cast<float>(tex->m_region.GetWidth());
-		m_conf.ps.adjs = 1;
+		// Use texelFetch() and clamp. Subtract one because the upper bound is exclusive.
+		m_conf.cb_ps.STRange = GSVector4(tex->GetRegionRect() - GSVector4i::cxpr(0, 0, 1, 1)) * GSVector4(scale);
+		m_conf.ps.region_rect = true;
 	}
-	if (tex->m_region.HasY())
+	else if (!tex->m_target)
 	{
-		m_conf.cb_ps.STRange.y = static_cast<float>(tex->m_region.GetMinY()) / static_cast<float>(mipth);
-		m_conf.cb_ps.STRange.w = static_cast<float>(mipth) / static_cast<float>(tex->m_region.GetHeight());
-		m_conf.ps.adjt = 1;
+		// Targets aren't currently offset, so STScale takes care of it.
+		if (tex->m_region.HasX())
+		{
+			m_conf.cb_ps.STRange.x = static_cast<float>(tex->m_region.GetMinX()) / static_cast<float>(miptw);
+			m_conf.cb_ps.STRange.z = static_cast<float>(miptw) / static_cast<float>(tex->m_region.GetWidth());
+			m_conf.ps.adjs = 1;
+		}
+		if (tex->m_region.HasY())
+		{
+			m_conf.cb_ps.STRange.y = static_cast<float>(tex->m_region.GetMinY()) / static_cast<float>(mipth);
+			m_conf.cb_ps.STRange.w = static_cast<float>(mipth) / static_cast<float>(tex->m_region.GetHeight());
+			m_conf.ps.adjt = 1;
+		}
 	}
 
 	m_conf.ps.fst = !!PRIM->FST;
@@ -3733,8 +3746,8 @@ void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Source* tex)
 	m_conf.cb_vs.texture_scale = GSVector2(tc_oh_ts.x, tc_oh_ts.y);
 
 	// Only enable clamping in CLAMP mode. REGION_CLAMP will be done manually in the shader
-	m_conf.sampler.tau = (wms == CLAMP_REPEAT);
-	m_conf.sampler.tav = (wmt == CLAMP_REPEAT);
+	m_conf.sampler.tau = (wms == CLAMP_REPEAT && !target_region);
+	m_conf.sampler.tav = (wmt == CLAMP_REPEAT && !target_region);
 	if (shader_emulated_sampler)
 	{
 		m_conf.sampler.biln = 0;
