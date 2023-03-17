@@ -532,16 +532,20 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 		src->m_valid_rect = dst->m_valid;
 		src->m_end_block = dst->m_end_block;
 
-		// Insert the texture in the hash set to keep track of it. But don't bother with
-		// texture cache list. It means that a new Source is created everytime we need it.
-		// If it is too expensive, one could cut memory allocation in Source constructor for this
-		// use case.
+		if (GSRendererHW::GetInstance()->IsTBPFrameOrZ(dst->m_TEX0.TBP0))
+		{
+			m_temporary_source = src;
+		}
+		else
+		{
+			src->SetPages();
+			m_src.Add(src, TEX0, g_gs_renderer->m_context->offset.tex);
+		}
+
 		if (palette)
 		{
 			AttachPaletteToSource(src, psm_s.pal, true);
 		}
-
-		m_src.m_surfaces.insert(src);
 	}
 	else if (g_gs_renderer->m_game.title == CRC::SVCChaos || g_gs_renderer->m_game.title == CRC::KOF2002)
 	{
@@ -2745,21 +2749,9 @@ void GSTextureCache::IncAge()
 	{
 		Source* s = *i;
 
-		if (s->m_shared_texture)
-		{
-			// Shared textures are temporary only added in the hash set but not in the texture
-			// cache list therefore you can't use RemoveAt
-			i = m_src.m_surfaces.erase(i);
-			delete s;
-		}
-		else
-		{
-			++i;
-			if (++s->m_age > (s->CanPreload() ? max_preload_age : max_age))
-			{
-				m_src.RemoveAt(s);
-			}
-		}
+		++i;
+		if (++s->m_age > (s->CanPreload() ? max_preload_age : max_age))
+			m_src.RemoveAt(s);
 	}
 
 	const u32 max_hash_cache_age = 30;
@@ -3073,7 +3065,7 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 		{
 			// optimization for TBP == FRAME
 			const GSDrawingContext* const context = g_gs_renderer->m_context;
-			if (context->FRAME.Block() == TEX0.TBP0 || context->ZBUF.Block() == TEX0.TBP0)
+			if (g_gs_renderer->IsTBPFrameOrZ(TEX0.TBP0))
 			{
 				// For the TS2 case above, src_range is going to be incorrect, since TW/TH are incorrect.
 				// We can remove this check once we move it to tex-is-fb instead.
@@ -3120,7 +3112,8 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 			src->m_valid_rect = dst->m_valid;
 			src->m_end_block = dst->m_end_block;
 
-			// kill the source afterwards, since we don't want to have to track changes to the target
+			// For now, we have to kill the copy immediately. If we leave it here, we might try to use it
+			// later on when FRAME == TEX0, which is unsafe. Once we fix hazards, it can go.
 			m_temporary_source = src;
 		}
 		else
@@ -3228,9 +3221,11 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 	ASSERT(src->m_from_target == (dst ? &dst->m_texture : nullptr));
 	ASSERT(src->m_scale == ((!dst || TEX0.PSM == PSM_PSMT8) ? 1.0f : dst->m_scale));
 
-	src->SetPages();
-
-	m_src.Add(src, TEX0, g_gs_renderer->m_context->offset.tex);
+	if (src != m_temporary_source)
+	{
+		src->SetPages();
+		m_src.Add(src, TEX0, g_gs_renderer->m_context->offset.tex);
+	}
 
 	return src;
 }
@@ -4750,7 +4745,7 @@ void GSTextureCache::InvalidateTemporarySource()
 	if (!m_temporary_source)
 		return;
 
-	m_src.RemoveAt(m_temporary_source);
+	delete m_temporary_source;
 	m_temporary_source = nullptr;
 }
 

@@ -3886,6 +3886,33 @@ GIFRegTEX0 GSState::GetTex0Layer(u32 lod)
 	return TEX0;
 }
 
+bool GSState::IsTBPFrameOrZ(u32 tbp) const
+{
+	GSDrawingContext* context = m_context;
+	const bool is_frame = (context->FRAME.Block() == tbp);
+	const bool is_z = (context->ZBUF.Block() == tbp);
+	if (!is_frame && !is_z)
+		return false;
+
+	const u32 fm = context->FRAME.FBMSK;
+	const u32 zm = context->ZBUF.ZMSK || context->TEST.ZTE == 0 ? 0xffffffff : 0;
+	const u32 fm_mask = GSLocalMemory::m_psm[m_context->FRAME.PSM].fmsk;
+
+	const u32 max_z = (0xFFFFFFFF >> (GSLocalMemory::m_psm[context->ZBUF.PSM].fmt * 8));
+	const bool no_rt = (context->ALPHA.IsCd() && PRIM->ABE && (context->FRAME.PSM == 1))
+		|| (!context->TEST.DATE && (context->FRAME.FBMSK & GSLocalMemory::m_psm[context->FRAME.PSM].fmsk) == GSLocalMemory::m_psm[context->FRAME.PSM].fmsk);
+	const bool no_ds = (
+		// Depth is always pass/fail (no read) and write are discarded.
+		(zm != 0 && context->TEST.ZTST <= ZTST_ALWAYS) ||
+		// Depth test will always pass
+		(zm != 0 && context->TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(m_vertex.buff[0].XYZ.Z, max_z) == max_z) ||
+		// Depth will be written through the RT
+		(!no_rt && context->FRAME.FBP == context->ZBUF.ZBP && !PRIM->TME && zm == 0 && (fm & fm_mask) == 0 && context->TEST.ZTE));
+
+	// Relying a lot on the optimizer here... I don't like it.
+	return (is_frame && !no_rt) || (is_z && !no_ds);
+}
+
 // GSTransferBuffer
 
 GSState::GSTransferBuffer::GSTransferBuffer()

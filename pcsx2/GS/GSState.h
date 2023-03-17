@@ -918,4 +918,7 @@ public:
 
 	PRIM_OVERLAP PrimitiveOverlap();
 	GIFRegTEX0 GetTex0Layer(u32 lod);
+
+	/// Returns true if the specified texture address matches the frame or Z buffer.
+	bool IsTBPFrameOrZ(u32 tbp) const;
 };
