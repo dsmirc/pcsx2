@@ -1165,7 +1165,7 @@ void GSDeviceOGL::StretchRect(GSTexture* sTex, const GSVector4& sRect, GSTexture
 	// Init
 	// ************************************
 
-	GL_PUSH("StretchRect from %d to %d", sTex->GetID(), dTex->GetID());
+	GL_PUSH("StretchRect from %d to %d", static_cast<GSTextureOGL*>(sTex)->GetID(), static_cast<GSTextureOGL*>(dTex)->GetID());
 	if (draw_in_depth)
 		OMSetRenderTargets(NULL, dTex);
 	else

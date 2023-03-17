@@ -581,8 +581,7 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 
 	if (dst)
 	{
-		GL_CACHE("TC depth: dst %s hit: %d (0x%x, %s)", to_string(dst->m_type),
-			dst->m_texture ? dst->m_texture->GetID() : 0,
+		GL_CACHE("TC depth: dst %s hit: (0x%x, %s)", to_string(dst->m_type),
 			TEX0.TBP0, psm_str(psm));
 
 		// Create a shared texture source
@@ -1048,12 +1047,11 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 #ifdef ENABLE_OGL_DEBUG
 		if (dst)
 		{
-			GL_CACHE("TC: dst %s hit (%s, OFF <%d,%d>): %d (0x%x, %s)",
+			GL_CACHE("TC: dst %s hit (%s, OFF <%d,%d>): (0x%x, %s)",
 				to_string(dst->m_type),
 				half_right ? "half" : "full",
 				x_offset,
 				y_offset,
-				dst->m_texture ? dst->m_texture->GetID() : 0,
 				TEX0.TBP0,
 				psm_str(TEX0.PSM));
 		}
@@ -1066,8 +1064,7 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 	}
 	else
 	{
-		GL_CACHE("TC: src hit: %d (0x%x, 0x%x, %s)",
-			src->m_texture ? src->m_texture->GetID() : 0,
+		GL_CACHE("TC: src hit: (0x%x, 0x%x, %s)",
 			TEX0.TBP0, psm_s.pal > 0 ? TEX0.CBP : 0,
 			psm_str(TEX0.PSM));
 
@@ -1160,7 +1157,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(const GIFRegTEX0& TEX0, con
 				}
 
 				dst = t;
-				GL_CACHE("TC: Lookup Frame %dx%d, perfect hit: %d (0x%x -> 0x%x %s)", size.x, size.y, dst->m_texture->GetID(), bp, t->m_end_block, psm_str(TEX0.PSM));
+				GL_CACHE("TC: Lookup Frame %dx%d, perfect hit: (0x%x -> 0x%x %s)", size.x, size.y, bp, t->m_end_block, psm_str(TEX0.PSM));
 				if (size.x > 0 || size.y > 0)
 					ScaleTargetForDisplay(dst, TEX0, size.x, size.y);
 
@@ -1182,7 +1179,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(const GIFRegTEX0& TEX0, con
 						continue;
 
 					dst = t;
-					GL_CACHE("TC: Lookup Frame %dx%d, inclusive hit: %d (0x%x, took 0x%x -> 0x%x %s)", size.x, size.y, t->m_texture->GetID(), bp, t->m_TEX0.TBP0, t->m_end_block, psm_str(TEX0.PSM));
+					GL_CACHE("TC: Lookup Frame %dx%d, inclusive hit: (0x%x, took 0x%x -> 0x%x %s)", size.x, size.y, bp, t->m_TEX0.TBP0, t->m_end_block, psm_str(TEX0.PSM));
 
 					if (size.x > 0 || size.y > 0)
 						ScaleTargetForDisplay(dst, TEX0, size.x, size.y);
@@ -1205,7 +1202,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(const GIFRegTEX0& TEX0, con
 				if (bp == t->m_TEX0.TBP0)
 				{
 					dst = t;
-					GL_CACHE("TC: Lookup Frame %dx%d, empty hit: %d (0x%x -> 0x%x %s)", size.x, size.y, dst->m_texture->GetID(), bp, t->m_end_block, psm_str(TEX0.PSM));
+					GL_CACHE("TC: Lookup Frame %dx%d, empty hit: (0x%x -> 0x%x %s)", size.x, size.y, bp, t->m_end_block, psm_str(TEX0.PSM));
 					break;
 				}
 			}
@@ -1549,8 +1546,7 @@ void GSTextureCache::InvalidateVideoMemType(int type, u32 bp)
 
 		if (bp == t->m_TEX0.TBP0)
 		{
-			GL_CACHE("TC: InvalidateVideoMemType: Remove Target(%s) %d (0x%x)", to_string(type),
-				t->m_texture ? t->m_texture->GetID() : 0,
+			GL_CACHE("TC: InvalidateVideoMemType: Remove Target(%s) (0x%x)", to_string(type),
 				t->m_TEX0.TBP0);
 
 			// Need to also remove any sources which reference this target.
@@ -1639,8 +1635,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 					// miss will load invalid data.
 					//
 					// So just clear the damn buffer and forget about it.
-					GL_CACHE("TC: Clear Sub Target(%s) %d (0x%x)", to_string(type),
-						t->m_texture ? t->m_texture->GetID() : 0,
+					GL_CACHE("TC: Clear Sub Target(%s) (0x%x)", to_string(type),
 						t->m_TEX0.TBP0);
 					g_gs_device->ClearRenderTarget(t->m_texture, 0);
 					t->m_dirty.clear();
@@ -1755,8 +1750,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 			{
 				if (!found && GSUtil::HasCompatibleBits(psm, t->m_TEX0.PSM) && bw == std::max(t->m_TEX0.TBW, 1U))
 				{
-					GL_CACHE("TC: Dirty Target(%s) %d (0x%x) r(%d,%d,%d,%d)", to_string(type),
-						t->m_texture ? t->m_texture->GetID() : 0,
+					GL_CACHE("TC: Dirty Target(%s) (0x%x) r(%d,%d,%d,%d)", to_string(type),
 						t->m_TEX0.TBP0, r.x, r.y, r.z, r.w);
 
 					if (eewrite)
@@ -1781,9 +1775,8 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 						if (bw == std::max(t->m_TEX0.TBW, 1U) && GSLocalMemory::m_psm[psm].bpp == GSLocalMemory::m_psm[t->m_TEX0.PSM].bpp)
 						{
 							AddDirtyRectTarget(t, rect, psm, bw, rgba);
-							GL_CACHE("TC: Direct Dirty in the middle [aggressive] of Target(%s) %d [PSM:%s BP:0x%x->0x%x BW:%u rect(%d,%d=>%d,%d)] write[PSM:%s BP:0x%x BW:%u rect(%d,%d=>%d,%d)]",
+							GL_CACHE("TC: Direct Dirty in the middle [aggressive] of Target(%s) [PSM:%s BP:0x%x->0x%x BW:%u rect(%d,%d=>%d,%d)] write[PSM:%s BP:0x%x BW:%u rect(%d,%d=>%d,%d)]",
 								to_string(type),
-								t->m_texture ? t->m_texture->GetID() : 0,
 								psm_str(t->m_TEX0.PSM),
 								t->m_TEX0.TBP0,
 								t->m_end_block,
@@ -1858,9 +1851,8 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 									if (so.is_valid)
 									{
 										AddDirtyRectTarget(t, so.b2a_offset, psm, bw, rgba);
-										GL_CACHE("TC: Dirty in the middle [aggressive] of Target(%s) %d [PSM:%s BP:0x%x->0x%x BW:%u rect(%d,%d=>%d,%d)] write[PSM:%s BP:0x%x BW:%u rect(%d,%d=>%d,%d)]",
+										GL_CACHE("TC: Dirty in the middle [aggressive] of Target(%s) [PSM:%s BP:0x%x->0x%x BW:%u rect(%d,%d=>%d,%d)] write[PSM:%s BP:0x%x BW:%u rect(%d,%d=>%d,%d)]",
 											to_string(type),
-											t->m_texture ? t->m_texture->GetID() : 0,
 											psm_str(t->m_TEX0.PSM),
 											t->m_TEX0.TBP0,
 											t->m_end_block,
@@ -1897,8 +1889,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 						else
 						{
 							i = list.erase(j);
-							GL_CACHE("TC: Remove Target(%s) %d (0x%x)", to_string(type),
-								t->m_texture ? t->m_texture->GetID() : 0,
+							GL_CACHE("TC: Remove Target(%s) (0x%x)", to_string(type),
 								t->m_TEX0.TBP0);
 							delete t;
 						}
@@ -1938,8 +1929,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 
 						if (r.bottom > y)
 						{
-							GL_CACHE("TC: Dirty After Target(%s) %d (0x%x)", to_string(type),
-								t->m_texture ? t->m_texture->GetID() : 0,
+							GL_CACHE("TC: Dirty After Target(%s) (0x%x)", to_string(type),
 								t->m_TEX0.TBP0);
 
 							if (eewrite)
@@ -1968,8 +1958,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 					{
 						const int y = GSLocalMemory::m_psm[psm].pgs.y * offset / rowsize;
 
-						GL_CACHE("TC: Dirty in the middle of Target(%s) %d (0x%x->0x%x) pos(%d,%d => %d,%d) bw:%u", to_string(type),
-							t->m_texture ? t->m_texture->GetID() : 0,
+						GL_CACHE("TC: Dirty in the middle of Target(%s) (0x%x->0x%x) pos(%d,%d => %d,%d) bw:%u", to_string(type),
 							t->m_TEX0.TBP0, t->m_end_block,
 							r.left, r.top + y, r.right, r.bottom + y, bw);
 
@@ -1992,8 +1981,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 					if (t->m_age > 1 && bw > 1 && bw != t->m_TEX0.TBW)
 					{
 						i = list.erase(j);
-						GL_CACHE("TC: Tex in RT Remove Old Target(%s) %d (0x%x) TPSM %x PSM %x bp 0x%x", to_string(type),
-							t->m_texture ? t->m_texture->GetID() : 0,
+						GL_CACHE("TC: Tex in RT Remove Old Target(%s) (0x%x) TPSM %x PSM %x bp 0x%x", to_string(type),
 							t->m_TEX0.TBP0,
 							t->m_TEX0.PSM,
 							psm,
@@ -2044,8 +2032,7 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 							else
 							{
 								i = list.erase(j);
-								GL_CACHE("TC: Tex in RT Remove Target(%s) %d (0x%x) TPSM %x PSM %x bp 0x%x", to_string(type),
-									t->m_texture ? t->m_texture->GetID() : 0,
+								GL_CACHE("TC: Tex in RT Remove Target(%s) (0x%x) TPSM %x PSM %x bp 0x%x", to_string(type),
 									t->m_TEX0.TBP0,
 									t->m_TEX0.PSM,
 									psm,
@@ -2788,8 +2775,7 @@ void GSTextureCache::IncAge()
 			if (++t->m_age > max_rt_age)
 			{
 				i = list.erase(i);
-				GL_CACHE("TC: Remove Target(%s): %d (0x%x) due to age", to_string(type),
-					t->m_texture ? t->m_texture->GetID() : 0,
+				GL_CACHE("TC: Remove Target(%s): (0x%x) due to age", to_string(type),
 					t->m_TEX0.TBP0);
 
 				delete t;
@@ -3823,7 +3809,7 @@ void GSTextureCache::Read(Target* t, const GSVector4i& r)
 	// Yes lots of logging, but I'm not confident with this code
 	GL_PUSH("Texture Cache Read. Format(0x%x)", TEX0.PSM);
 
-	GL_PERF("TC: Read Back Target: %d (0x%x)[fmt: 0x%x]. Size %dx%d", t->m_texture->GetID(), TEX0.TBP0, TEX0.PSM, r.width(), r.height());
+	GL_PERF("TC: Read Back Target: (0x%x)[fmt: 0x%x]. Size %dx%d", TEX0.TBP0, TEX0.PSM, r.width(), r.height());
 
 	const GSVector4 src(GSVector4(r) * GSVector4(t->m_scale) / GSVector4(t->m_texture->GetSize()).xyxy());
 	const GSVector4i drc(0, 0, r.width(), r.height());
@@ -4537,9 +4523,8 @@ void GSTextureCache::SourceMap::RemoveAt(Source* s)
 {
 	m_surfaces.erase(s);
 
-	GL_CACHE("TC: Remove Src Texture: %d (0x%x)",
-		s->m_texture ? s->m_texture->GetID() : 0,
-		s->m_TEX0.TBP0);
+	GL_CACHE("TC: Remove Src Texture: 0x%x TBW %u PSM %s",
+		s->m_TEX0.TBP0, s->m_TEX0.TBW, psm_str(s->m_TEX0.PSM));
 
 	s->m_pages.loopPages([this, s](u32 page)
 	{
