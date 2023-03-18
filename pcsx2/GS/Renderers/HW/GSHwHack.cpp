@@ -1165,6 +1165,21 @@ bool GSHwHack::OI_Battlefield2(GSRendererHW& r, GSTexture* rt, GSTexture* ds, GS
 	return false;
 }
 
+bool GSHwHack::OI_HauntingGround(GSRendererHW& r, GSTexture* rt, GSTexture* ds, GSTextureCache::Source* t)
+{
+	// Haunting Ground clears two targets by doing a 256x448 direct colour write at 0x3000, covering a target at 0x3380.
+	// This currently isn't handled in our HLE clears, so we need to manually remove the other target.
+	if (rt && !ds && !t && r.IsConstantDirectWriteMemClear(true))
+	{
+		GL_CACHE("GSHwHack::OI_HauntingGround()");
+		g_texture_cache->InvalidateVideoMemTargets(GSTextureCache::RenderTarget, RCONTEXT->FRAME.Block(),
+			RCONTEXT->FRAME.FBW, RCONTEXT->FRAME.PSM, r.m_r);
+	}
+
+	// Not skipping anything. This is just an invalidation hack.
+	return true;
+}
+
 #undef RCONTEXT
 #undef RPRIM
 
@@ -1242,6 +1257,7 @@ const GSHwHack::Entry<GSRendererHW::OI_Ptr> GSHwHack::s_before_draw_functions[] 
 	CRC_F(OI_JakGames, CRCHackLevel::Minimum),
 	CRC_F(OI_BurnoutGames, CRCHackLevel::Minimum),
 	CRC_F(OI_Battlefield2, CRCHackLevel::Minimum),
+	CRC_F(OI_HauntingGround, CRCHackLevel::Minimum)
 };
 
 #undef CRC_F

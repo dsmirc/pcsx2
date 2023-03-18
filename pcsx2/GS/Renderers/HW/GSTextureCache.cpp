@@ -1614,34 +1614,6 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 				}
 			}
 		}
-
-		// Haunting ground write frame buffer 0x3000 and expect to write data to 0x3380
-		// Note: the game only does a 0 direct write. If some games expect some real data
-		// we are screwed.
-		if (g_gs_renderer->m_game.title == CRC::HauntingGround)
-		{
-			u32 end_block = GSLocalMemory::m_psm[psm].info.bn(rect.z - 1, rect.w - 1, bp, bw); // Valid only for color formats
-			auto type = RenderTarget;
-
-			for (auto t : m_dst[type])
-			{
-				if (t->m_TEX0.TBP0 > bp && t->m_end_block <= end_block)
-				{
-					// Haunting ground expect to clean buffer B with a rendering into buffer A.
-					// Situation is quite messy as it would require to extract the data from the buffer A
-					// and to move in buffer B.
-					//
-					// Of course buffers don't share the same line width. You can't delete the buffer as next
-					// miss will load invalid data.
-					//
-					// So just clear the damn buffer and forget about it.
-					GL_CACHE("TC: Clear Sub Target(%s) (0x%x)", to_string(type),
-						t->m_TEX0.TBP0);
-					g_gs_device->ClearRenderTarget(t->m_texture, 0);
-					t->m_dirty.clear();
-				}
-			}
-		}
 	}
 
 	bool found = false;
@@ -2708,6 +2680,25 @@ void GSTextureCache::InvalidateVideoMemSubTarget(GSTextureCache::Target* rt)
 		else
 		{
 			++i;
+		}
+	}
+}
+
+void GSTextureCache::InvalidateVideoMemTargets(int type, u32 bp, u32 bw, u32 psm, const GSVector4i& r)
+{
+	auto& list = m_dst[type];
+
+	for (auto i = list.begin(); i != list.end();)
+	{
+		GSTextureCache::Target* t = *i;
+		auto ei = i++;
+
+		if (t->m_TEX0.TBP0 != bp && t->Overlaps(bp, bw, psm, r))
+		{
+			GL_CACHE("InvalidateVideoMemTargets(%x, %u, %s, %d,%d => %d,%d): Removing target at %x %u %s", bp, bw, psm,
+				r.x, r.y, r.z, r.w, t->m_TEX0.PSM, t->m_TEX0.TBW, psm_str(t->m_TEX0.PSM));
+			list.erase(ei);
+			delete t;
 		}
 	}
 }
