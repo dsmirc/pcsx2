@@ -64,6 +64,7 @@ public:
 		u32 GetHeight() const { return (GetMaxY() - GetMinY()); }
 
 		/// Returns true if the area of the region exceeds the TW/TH size (i.e. "fixed tex0").
+		bool IsFixedTEX0(GIFRegTEX0 TEX0) const;
 		bool IsFixedTEX0(int tw, int th) const;
 		bool IsFixedTEX0W(int tw) const;
 		bool IsFixedTEX0H(int th) const;
@@ -80,6 +81,9 @@ public:
 
 		/// Adjusts the texture base pointer and block width relative to the region.
 		void AdjustTEX0(GIFRegTEX0* TEX0) const;
+
+		/// Creates a new source region based on the CLAMP register.
+		static SourceRegion Create(GIFRegTEX0 TEX0, GIFRegCLAMP CLAMP);
 	};
 
 	using HashType = u64;

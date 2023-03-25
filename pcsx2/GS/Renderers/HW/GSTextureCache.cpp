@@ -462,6 +462,59 @@ void GSTextureCache::DirtyRectByPage(u32 sbp, u32 spsm, u32 sbw, Target* t, GSVe
 	AddDirtyRectTarget(t, new_rect, t->m_TEX0.PSM, t->m_TEX0.TBW, rgba);
 }
 
+__ri static GSTextureCache::Source* FindSourceInMap(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA,
+	const GSLocalMemory::psm_t& psm_s, const u32* clut, const GSTexture* gpu_clut, const GSVector2i& compare_lod,
+	const GSTextureCache::SourceRegion& region, u32 fixed_tex0, FastList<GSTextureCache::Source*>& map)
+{
+	for (auto i = map.begin(); i != map.end(); ++i)
+	{
+		GSTextureCache::Source* s = *i;
+
+		if (((TEX0.U32[0] ^ s->m_TEX0.U32[0]) | ((TEX0.U32[1] ^ s->m_TEX0.U32[1]) & 3)) != 0) // TBP0 TBW PSM TW TH
+			continue;
+
+		// Target are converted (AEM & palette) on the fly by the GPU. They don't need extra check
+		if (!s->m_target)
+		{
+			if (psm_s.pal > 0)
+			{
+				// If we're doing GPU CLUT, we don't want to use the CPU-converted version.
+				if (gpu_clut && !s->m_palette)
+					continue;
+
+				// We request a palette texture (psm_s.pal). If the texture was
+				// converted by the CPU (!s->m_palette), we need to ensure
+				// palette content is the same.
+				if (!s->m_palette && !s->ClutMatch({ clut, psm_s.pal }))
+					continue;
+			}
+			else
+			{
+				// We request a 24/16 bit RGBA texture. Alpha expansion was done by
+				// the CPU.  We need to check that TEXA is identical
+				if (psm_s.fmt > 0 && s->m_TEXA.U64 != TEXA.U64)
+					continue;
+			}
+
+			// When fixed tex0 is used, we must find a matching region texture. The base likely
+			// doesn't contain to the correct region. Bit cheeky here, avoid a logical or by
+			// adding the invalid tex0 bit in.
+			if (((s->m_region.bits | fixed_tex0) != 0) && s->m_region.bits != region.bits)
+				continue;
+
+			// Same base mip texture, but we need to check that MXL was the same as well.
+			// When mipmapping is off, this will be 0,0 vs 0,0.
+			if (s->m_lod != compare_lod)
+				continue;
+		}
+
+		map.MoveFront(i.Index());
+		return s;
+	}
+
+	return nullptr;
+}
+
 GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, const GIFRegCLAMP& CLAMP, const GSVector4i& r, bool palette)
 {
 	if (GSConfig.UserHacks_DisableDepthSupport)
@@ -470,10 +523,21 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 		throw GSRecoverableError();
 	}
 
-	const GSLocalMemory::psm_t& psm_s = GSLocalMemory::m_psm[TEX0.PSM];
+	GL_CACHE("TC: Lookup Depth Source <%d,%d => %d,%d> (0x%x, %s, BW: %u, CBP: 0x%x, TW: %d, TH: %d)", r.x, r.y, r.z,
+		r.w, TEX0.TBP0, psm_str(TEX0.PSM), TEX0.TBW, TEX0.CBP, 1 << TEX0.TW, 1 << TEX0.TH);
 
-	Source* src = NULL;
-	Target* dst = NULL;
+	const SourceRegion region = SourceRegion::Create(TEX0, CLAMP);
+	const GSLocalMemory::psm_t& psm_s = GSLocalMemory::m_psm[TEX0.PSM];
+	Source* src = FindSourceInMap(TEX0, TEXA, psm_s, nullptr, nullptr, GSVector2i(0, 0), region,
+		region.IsFixedTEX0(TEX0), m_src.m_map[TEX0.TBP0 >> 5]);
+	if (src)
+	{
+		GL_CACHE("TC: src hit: (0x%x, %s)", TEX0.TBP0, psm_str(TEX0.PSM));
+		src->Update(r);
+		return src;
+	}
+
+	Target* dst = nullptr;
 
 	// Check only current frame, I guess it is only used as a postprocessing effect
 	const u32 bp = TEX0.TBP0;
@@ -576,59 +640,6 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 	return src;
 }
 
-__ri static GSTextureCache::Source* FindSourceInMap(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA,
-	const GSLocalMemory::psm_t& psm_s, const u32* clut, const GSTexture* gpu_clut, const GSVector2i& compare_lod,
-	const GSTextureCache::SourceRegion& region, u32 fixed_tex0, FastList<GSTextureCache::Source*>& map)
-{
-	for (auto i = map.begin(); i != map.end(); ++i)
-	{
-		GSTextureCache::Source* s = *i;
-
-		if (((TEX0.U32[0] ^ s->m_TEX0.U32[0]) | ((TEX0.U32[1] ^ s->m_TEX0.U32[1]) & 3)) != 0) // TBP0 TBW PSM TW TH
-			continue;
-
-		// Target are converted (AEM & palette) on the fly by the GPU. They don't need extra check
-		if (!s->m_target)
-		{
-			if (psm_s.pal > 0)
-			{
-				// If we're doing GPU CLUT, we don't want to use the CPU-converted version.
-				if (gpu_clut && !s->m_palette)
-					continue;
-
-				// We request a palette texture (psm_s.pal). If the texture was
-				// converted by the CPU (!s->m_palette), we need to ensure
-				// palette content is the same.
-				if (!s->m_palette && !s->ClutMatch({ clut, psm_s.pal }))
-					continue;
-			}
-			else
-			{
-				// We request a 24/16 bit RGBA texture. Alpha expansion was done by
-				// the CPU.  We need to check that TEXA is identical
-				if (psm_s.fmt > 0 && s->m_TEXA.U64 != TEXA.U64)
-					continue;
-			}
-
-			// When fixed tex0 is used, we must find a matching region texture. The base likely
-			// doesn't contain to the correct region. Bit cheeky here, avoid a logical or by
-			// adding the invalid tex0 bit in.
-			if (((s->m_region.bits | fixed_tex0) != 0) && s->m_region.bits != region.bits)
-				continue;
-
-			// Same base mip texture, but we need to check that MXL was the same as well.
-			// When mipmapping is off, this will be 0,0 vs 0,0.
-			if (s->m_lod != compare_lod)
-				continue;
-		}
-
-		map.MoveFront(i.Index());
-		return s;
-	}
-
-	return nullptr;
-}
-
 GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, const GIFRegCLAMP& CLAMP, const GSVector4i& r, const GSVector2i* lod)
 {
 	GL_CACHE("TC: Lookup Source <%d,%d => %d,%d> (0x%x, %s, BW: %u, CBP: 0x%x, TW: %d, TH: %d)", r.x, r.y, r.z, r.w, TEX0.TBP0, psm_str(TEX0.PSM), TEX0.TBW, TEX0.CBP, 1 << TEX0.TW, 1 << TEX0.TH);
@@ -639,48 +650,7 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 	const u32* const clut = g_gs_renderer->m_mem.m_clut;
 	GSTexture* const gpu_clut = (psm_s.pal > 0) ? g_gs_renderer->m_mem.m_clut.GetGPUTexture() : nullptr;
 
-	SourceRegion region = {};
-	if (CLAMP.WMS == CLAMP_REGION_CLAMP && CLAMP.MAXU >= CLAMP.MINU)
-	{
-		// Another Lupin case here, it uses region clamp with UV (not ST), puts a clamp region further
-		// into the texture, but a smaller TW/TH. Catch this by looking for a clamp range above TW.
-		const u32 rw = CLAMP.MAXU - CLAMP.MINU + 1;
-		if (rw < (1u << TEX0.TW) || CLAMP.MAXU >= (1u << TEX0.TW))
-		{
-			region.SetX(CLAMP.MINU, CLAMP.MAXU + 1);
-			GL_CACHE("TC: Region clamp optimization: %d width -> %d", 1 << TEX0.TW, region.GetWidth());
-		}
-	}
-	else if (CLAMP.WMS == CLAMP_REGION_REPEAT && CLAMP.MINU != 0)
-	{
-		// Lupin the 3rd is really evil, it sets TW/TH to the texture size, but then uses region repeat
-		// to offset the actual texture data to elsewhere. So, we'll just force any cases like this down
-		// the region texture path.
-		const u32 rw = ((CLAMP.MINU | CLAMP.MAXU) - CLAMP.MAXU) + 1;
-		if (rw < (1u << TEX0.TW) || (CLAMP.MAXU != 0 && (rw <= (1u << TEX0.TW))))
-		{
-			region.SetX(CLAMP.MAXU, (CLAMP.MINU | CLAMP.MAXU) + 1);
-			GL_CACHE("TC: Region repeat optimization: %d width -> %d", 1 << TEX0.TW, region.GetWidth());
-		}
-	}
-	if (CLAMP.WMT == CLAMP_REGION_CLAMP && CLAMP.MAXV >= CLAMP.MINV)
-	{
-		const u32 rh = CLAMP.MAXV - CLAMP.MINV + 1;
-		if (rh < (1u << TEX0.TH) || CLAMP.MAXV >= (1u << TEX0.TH))
-		{
-			region.SetY(CLAMP.MINV, CLAMP.MAXV + 1);
-			GL_CACHE("TC: Region clamp optimization: %d height -> %d", 1 << TEX0.TW, region.GetHeight());
-		}
-	}
-	else if (CLAMP.WMT == CLAMP_REGION_REPEAT && CLAMP.MINV != 0)
-	{
-		const u32 rh = ((CLAMP.MINV | CLAMP.MAXV) - CLAMP.MAXV) + 1;
-		if (rh < (1u << TEX0.TH) || (CLAMP.MAXV != 0 && (rh <= (1u << TEX0.TH))))
-		{
-			region.SetY(CLAMP.MAXV, (CLAMP.MINV | CLAMP.MAXV) + 1);
-			GL_CACHE("TC: Region repeat optimization: %d height -> %d", 1 << TEX0.TW, region.GetHeight());
-		}
-	}
+	const SourceRegion region = SourceRegion::Create(TEX0, CLAMP);
 
 	// Prevent everything going to rubbish if a game somehow sends a TW/TH above 10, and region isn't being used.
 	if ((TEX0.TW > 10 && !region.HasX()) || (TEX0.TH > 10 && !region.HasY()))
@@ -4978,6 +4948,11 @@ bool GSTextureCache::SurfaceOffsetKeyEqual::operator()(const GSTextureCache::Sur
 	return true;
 }
 
+bool GSTextureCache::SourceRegion::IsFixedTEX0(GIFRegTEX0 TEX0) const
+{
+	return IsFixedTEX0(1 << TEX0.TW, 1 << TEX0.TH);
+}
+
 bool GSTextureCache::SourceRegion::IsFixedTEX0(int tw, int th) const
 {
 	return IsFixedTEX0W(tw) || IsFixedTEX0H(th);
@@ -5028,6 +5003,55 @@ void GSTextureCache::SourceRegion::AdjustTEX0(GIFRegTEX0* TEX0) const
 {
 	const GSOffset offset(GSLocalMemory::m_psm[TEX0->PSM].info, TEX0->TBP0, TEX0->TBW, TEX0->PSM);
 	TEX0->TBP0 += offset.bn(GetMinX(), GetMinY());
+}
+
+GSTextureCache::SourceRegion GSTextureCache::SourceRegion::Create(GIFRegTEX0 TEX0, GIFRegCLAMP CLAMP)
+{
+	SourceRegion region = {};
+
+	if (CLAMP.WMS == CLAMP_REGION_CLAMP && CLAMP.MAXU >= CLAMP.MINU)
+	{
+		// Another Lupin case here, it uses region clamp with UV (not ST), puts a clamp region further
+		// into the texture, but a smaller TW/TH. Catch this by looking for a clamp range above TW.
+		const u32 rw = CLAMP.MAXU - CLAMP.MINU + 1;
+		if (rw < (1u << TEX0.TW) || CLAMP.MAXU >= (1u << TEX0.TW))
+		{
+			region.SetX(CLAMP.MINU, CLAMP.MAXU + 1);
+			GL_CACHE("TC: Region clamp optimization: %d width -> %d", 1 << TEX0.TW, region.GetWidth());
+		}
+	}
+	else if (CLAMP.WMS == CLAMP_REGION_REPEAT && CLAMP.MINU != 0)
+	{
+		// Lupin the 3rd is really evil, it sets TW/TH to the texture size, but then uses region repeat
+		// to offset the actual texture data to elsewhere. So, we'll just force any cases like this down
+		// the region texture path.
+		const u32 rw = ((CLAMP.MINU | CLAMP.MAXU) - CLAMP.MAXU) + 1;
+		if (rw < (1u << TEX0.TW) || (CLAMP.MAXU != 0 && (rw <= (1u << TEX0.TW))))
+		{
+			region.SetX(CLAMP.MAXU, (CLAMP.MINU | CLAMP.MAXU) + 1);
+			GL_CACHE("TC: Region repeat optimization: %d width -> %d", 1 << TEX0.TW, region.GetWidth());
+		}
+	}
+	if (CLAMP.WMT == CLAMP_REGION_CLAMP && CLAMP.MAXV >= CLAMP.MINV)
+	{
+		const u32 rh = CLAMP.MAXV - CLAMP.MINV + 1;
+		if (rh < (1u << TEX0.TH) || CLAMP.MAXV >= (1u << TEX0.TH))
+		{
+			region.SetY(CLAMP.MINV, CLAMP.MAXV + 1);
+			GL_CACHE("TC: Region clamp optimization: %d height -> %d", 1 << TEX0.TW, region.GetHeight());
+		}
+	}
+	else if (CLAMP.WMT == CLAMP_REGION_REPEAT && CLAMP.MINV != 0)
+	{
+		const u32 rh = ((CLAMP.MINV | CLAMP.MAXV) - CLAMP.MAXV) + 1;
+		if (rh < (1u << TEX0.TH) || (CLAMP.MAXV != 0 && (rh <= (1u << TEX0.TH))))
+		{
+			region.SetY(CLAMP.MAXV, (CLAMP.MINV | CLAMP.MAXV) + 1);
+			GL_CACHE("TC: Region repeat optimization: %d height -> %d", 1 << TEX0.TW, region.GetHeight());
+		}
+	}
+
+	return region;
 }
 
 using BlockHashState = XXH3_state_t;
