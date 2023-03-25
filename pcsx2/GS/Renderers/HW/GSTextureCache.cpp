@@ -544,10 +544,13 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 	// Check only current frame, I guess it is only used as a postprocessing effect
 	const u32 bp = TEX0.TBP0;
 	const u32 psm = TEX0.PSM;
+	const u32 used_bits = GSUtil::GetWriteMask(TEX0.PSM, 0, true);
 
 	for (auto t : m_dst[DepthStencil])
 	{
-		if (t->m_used && t->m_dirty.empty() && GSUtil::HasSharedBits(bp, psm, t->m_TEX0.TBP0, t->m_TEX0.PSM))
+		// If the depth target's bits are present in a colour target, prefer that (alias check).
+		if (t->m_used && t->m_dirty.empty() && ((t->m_aliasing_bits & used_bits) == 0) &&
+			GSUtil::HasSharedBits(bp, psm, t->m_TEX0.TBP0, t->m_TEX0.PSM))
 		{
 			ASSERT(GSLocalMemory::m_psm[t->m_TEX0.PSM].depth);
 			if (t->m_age == 0)
@@ -572,8 +575,17 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 			// FIXME: do I need to allow m_age == 1 as a potential match (as DepthStencil) ???
 			if (t->m_age <= 1 && t->m_used && t->m_dirty.empty() && GSUtil::HasSharedBits(bp, psm, t->m_TEX0.TBP0, t->m_TEX0.PSM))
 			{
-				ASSERT(GSLocalMemory::m_psm[t->m_TEX0.PSM].depth);
+				if (!GSLocalMemory::m_psm[t->m_TEX0.PSM].depth)
+				{
+					GL_CACHE("TC: Reading colour format %s as %s, pixels should be scrambled", psm_str(t->m_TEX0.PSM),
+						psm_str(TEX0.PSM));
+				}
+
 				dst = t;
+
+				// We have to update either the depth or the colour target if there's aliasing going on.
+				// Colour we can update by channel, so let's use that. Test case: Eragon
+				dst->UpdateFromAliasedTargets(used_bits);
 				break;
 			}
 		}
@@ -584,33 +596,7 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 		GL_CACHE("TC depth: dst %s hit: (0x%x, %s)", to_string(dst->m_type),
 			TEX0.TBP0, psm_str(psm));
 
-		// Create a shared texture source
-		src = new Source(TEX0, TEXA);
-		src->m_texture = dst->m_texture;
-		src->m_scale = dst->m_scale;
-		src->m_unscaled_size = dst->m_unscaled_size;
-		src->m_shared_texture = true;
-		src->m_target = true; // So renderer can check if a conversion is required
-		src->m_from_target = dst; // avoid complex condition on the renderer
-		src->m_from_target_TEX0 = dst->m_TEX0;
-		src->m_32_bits_fmt = dst->m_32_bits_fmt;
-		src->m_valid_rect = dst->m_valid;
-		src->m_end_block = dst->m_end_block;
-
-		if (GSRendererHW::GetInstance()->IsTBPFrameOrZ(dst->m_TEX0.TBP0))
-		{
-			m_temporary_source = src;
-		}
-		else
-		{
-			src->SetPages();
-			m_src.Add(src, TEX0, g_gs_renderer->m_context->offset.tex);
-		}
-
-		if (palette)
-		{
-			AttachPaletteToSource(src, psm_s.pal, true);
-		}
+		src = CreateDepthSource(TEX0, TEXA, dst, palette);
 	}
 	else
 	{
@@ -620,6 +606,39 @@ GSTextureCache::Source* GSTextureCache::LookupDepthSource(const GIFRegTEX0& TEX0
 
 	ASSERT(src->m_texture);
 	ASSERT(src->m_scale == (dst ? dst->m_scale : 1.0f));
+
+	return src;
+}
+
+GSTextureCache::Source* GSTextureCache::CreateDepthSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, Target* t, bool palette)
+{
+	// Create a shared texture source
+	Source* src = new Source(TEX0, TEXA);
+	src->m_texture = t->m_texture;
+	src->m_scale = t->m_scale;
+	src->m_unscaled_size = t->m_unscaled_size;
+	src->m_shared_texture = true;
+	src->m_target = true; // So renderer can check if a conversion is required
+	src->m_from_target = t; // avoid complex condition on the renderer
+	src->m_from_target_TEX0 = t->m_TEX0;
+	src->m_32_bits_fmt = t->m_32_bits_fmt;
+	src->m_valid_rect = t->m_valid;
+	src->m_end_block = t->m_end_block;
+
+	if (GSRendererHW::GetInstance()->IsTBPFrameOrZ(t->m_TEX0.TBP0))
+	{
+		m_temporary_source = src;
+	}
+	else
+	{
+		src->SetPages();
+		m_src.Add(src, TEX0, g_gs_renderer->m_context->offset.tex);
+	}
+
+	if (palette)
+	{
+		AttachPaletteToSource(src, GSLocalMemory::m_psm[TEX0.PSM].pal, true);
+	}
 
 	return src;
 }
@@ -782,7 +801,8 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 				else
 					rect_clean = t->m_dirty.empty();
 
-				const bool t_clean = ((t->m_dirty.GetDirtyChannels() & GSUtil::GetChannelMask(psm)) == 0) || rect_clean;
+				const bool t_aliasing = (t->m_aliasing_bits & psm_s.fmsk) != 0;
+				const bool t_clean = !t_aliasing && (((t->m_dirty.GetDirtyChannels() & GSUtil::GetChannelMask(psm)) == 0) || rect_clean);
 				const bool t_wraps = t->m_end_block > GSTextureCache::MAX_BP;
 				// Match if we haven't already got a tex in rt
 				if (t_clean && GSUtil::HasSharedBits(bp, psm, t->m_TEX0.TBP0, t_psm))
@@ -1011,11 +1031,11 @@ GSTextureCache::Source* GSTextureCache::LookupSource(const GIFRegTEX0& TEX0, con
 						GIFRegTEX0 depth_TEX0;
 						depth_TEX0.U32[0] = TEX0.U32[0] | (0x30u << 20u);
 						depth_TEX0.U32[1] = TEX0.U32[1];
-						return LookupDepthSource(depth_TEX0, TEXA, CLAMP, r);
+						return CreateDepthSource(depth_TEX0, TEXA, t, false);
 					}
 					else
 					{
-						return LookupDepthSource(TEX0, TEXA, CLAMP, r, true);
+						return CreateDepthSource(TEX0, TEXA, t, true);
 					}
 				}
 			}
@@ -1249,6 +1269,7 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 
 		if (dst_match)
 		{
+			dst_match->UpdateFromAliasedTargets(~fbmask);
 			dst_match->Update(true);
 			calcRescale(dst_match);
 			dst = CreateTarget(TEX0, new_size.x, new_size.y, scale, type, clear);
@@ -1513,14 +1534,14 @@ bool GSTextureCache::PrepareDownloadTexture(u32 width, u32 height, GSTexture::Fo
 // Goal: Depth And Target at the same address is not possible. On GS it is
 // the same memory but not on the Dx/GL. Therefore a write to the Depth/Target
 // must invalidate the Target/Depth respectively
-void GSTextureCache::InvalidateVideoMemType(int type, u32 bp)
+void GSTextureCache::InvalidateVideoMemType(int type, u32 bp, u32 bits)
 {
 	if (GSConfig.UserHacks_DisableDepthSupport)
 		return;
 
 	// The Getaway games need this function disabled for player shadows to work correctly.
-	if (g_gs_renderer->m_game.title == CRC::GetawayGames)
-		return;
+	//if (g_gs_renderer->m_game.title == CRC::GetawayGames)
+		//return;
 
 	auto& list = m_dst[type];
 	for (auto i = list.begin(); i != list.end(); ++i)
@@ -1529,6 +1550,17 @@ void GSTextureCache::InvalidateVideoMemType(int type, u32 bp)
 
 		if (bp == t->m_TEX0.TBP0)
 		{
+			t->m_valid_bits &= ~bits;
+			t->m_aliasing_bits |= bits;
+
+			if (t->m_valid_bits != 0)
+			{
+				GL_CACHE(
+					"TC: InvalidateVideoMemType: Not removing target(%s) (0x%x) due to no bit overlap (%08X vs %08X)",
+					to_string(type), t->m_TEX0.TBP0, t->m_valid_bits, bits);
+				break;
+			}
+
 			GL_CACHE("TC: InvalidateVideoMemType: Remove Target(%s) (0x%x)", to_string(type),
 				t->m_TEX0.TBP0);
 
@@ -2381,6 +2413,7 @@ bool GSTextureCache::Move(u32 SBP, u32 SBW, u32 SPSM, int sx, int sy, u32 DBP, u
 
 	// We don't want to copy "old" data that the game has overwritten with writes,
 	// so flush any overlapping dirty area.
+	src->UpdateFromAliasedTargets(GSUtil::GetWriteMask(SPSM, 0, GSLocalMemory::m_psm[SPSM].depth));
 	src->UpdateIfDirtyIntersects(GSVector4i(sx, sy, sx + w, sy + h));
 
 	// The main point of HW moves is so GPU data can get used as sources. If we don't flush all writes,
@@ -2420,8 +2453,14 @@ bool GSTextureCache::Move(u32 SBP, u32 SBW, u32 SPSM, int sx, int sy, u32 DBP, u
 		scaled_dx, scaled_dy);
 
 	dst->UpdateValidity(GSVector4i(dx, dy, dx + w, dy + h));
+
 	// Invalidate any sources that overlap with the target (since they're now stale).
 	InvalidateVideoMem(g_gs_renderer->m_mem.GetOffset(DBP, DBW, DPSM), GSVector4i(dx, dy, dx + w, dy + h), false, false);
+
+	// And any overlapping frame/Z targets.
+	InvalidateVideoMemType(dst->m_type == RenderTarget ? DepthStencil : RenderTarget, DBP,
+		GSUtil::GetWriteMask(DPSM, 0, GSLocalMemory::m_psm[DPSM].depth));
+
 	return true;
 }
 
@@ -2886,6 +2925,7 @@ GSTextureCache::Source* GSTextureCache::CreateSource(const GIFRegTEX0& TEX0, con
 		src->m_valid_rect = dst->m_valid;
 		src->m_end_block = dst->m_end_block;
 
+		dst->UpdateFromAliasedTargets(GSLocalMemory::m_psm[TEX0.PSM].fmsk);
 		dst->Update(true);
 
 		// Rounding up should never exceed the texture size (since it itself should be rounded up), but just in case.
@@ -4267,6 +4307,66 @@ void GSTextureCache::Target::Update(bool reset_age)
 	m_dirty.clear();
 }
 
+void GSTextureCache::Target::UpdateFromAliasedTargets(u32 needed_bits)
+{
+	if ((m_aliasing_bits & needed_bits) == 0)
+		return;
+
+	const GSLocalMemory::psm_t& psm_s = GSLocalMemory::m_psm[m_TEX0.PSM];
+
+	for (Target* other : g_texture_cache->m_dst[(m_type == RenderTarget) ? DepthStencil : RenderTarget])
+	{
+		if (other->m_TEX0.TBP0 != m_TEX0.TBP0)
+			continue;
+
+		// assuming there's only one target at this pointer which might match
+		// make sure that it's actually been written to on the other target
+		const u32 bits_to_copy = m_aliasing_bits & other->m_valid_bits;
+		if (bits_to_copy == 0)
+			break;
+
+		ShaderConvert shader;
+		const bool fmt_16_bits =
+			(psm_s.bpp == 16 && GSLocalMemory::m_psm[other->m_TEX0.PSM].bpp == 16 && !other->m_32_bits_fmt);
+		if (m_type == DepthStencil)
+		{
+			shader = (fmt_16_bits) ? ShaderConvert::RGB5A1_TO_FLOAT16 :
+									 (ShaderConvert)(static_cast<int>(ShaderConvert::RGBA8_TO_FLOAT32) + psm_s.fmt);
+		}
+		else
+		{
+			shader = (fmt_16_bits) ? ShaderConvert::FLOAT16_TO_RGB5A1 : ShaderConvert::FLOAT32_TO_RGBA8;
+		}
+
+		const GSVector4 dRect = GSVector4(GetUnscaledRect().rintersect(other->m_valid)) * GSVector4(m_scale);
+		const GSVector4 sRect = dRect / (GSVector4(m_texture->GetSize()).xyxy());
+
+		// If there's bits which we don't want to replace, try to preserve those.
+		const u32 preserve_bits = (m_valid_bits & ~(m_aliasing_bits & needed_bits));
+		if (m_type == RenderTarget && preserve_bits != 0)
+		{
+			GSTexture* temp = g_gs_device->CreateRenderTarget(m_texture->GetWidth(), m_texture->GetHeight(), GSTexture::Format::Color, false);
+			g_gs_device->StretchRect(other->m_texture, sRect, temp, dRect, shader, false);
+
+			// Best we're gonna get. No fbmsk for stretchrect!
+			const u32 write_bits = ~preserve_bits;
+			g_gs_device->StretchRect(temp, sRect, m_texture, dRect, (write_bits & 0xff) != 0,
+				((write_bits >> 8) & 0xff) != 0, ((write_bits >> 16) & 0xff) != 0, (write_bits >> 24) != 0);
+
+			g_gs_device->Recycle(temp);
+		}
+		else
+		{
+			// TODO: rescale if needed
+			GL_CACHE("TC: Update aliased bits at 0x%x : %08X", m_TEX0.TBP0, bits_to_copy);
+			g_gs_device->StretchRect(other->m_texture, sRect, m_texture, dRect, shader, false);
+		}
+
+		m_aliasing_bits = 0;
+		break;
+	}
+}
+
 void GSTextureCache::Target::UpdateIfDirtyIntersects(const GSVector4i& rc)
 {
 	for (auto& dirty : m_dirty)
@@ -4352,6 +4452,7 @@ void GSTextureCache::Target::UpdateValidity(const GSVector4i& rect, bool can_res
 void GSTextureCache::Target::UpdateValidBits(u32 bits_written)
 {
 	m_valid_bits |= bits_written;
+	m_aliasing_bits &= ~bits_written;
 }
 
 bool GSTextureCache::Target::ResizeTexture(int new_unscaled_width, int new_unscaled_height, bool recycle_old)

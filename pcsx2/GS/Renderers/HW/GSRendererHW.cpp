@@ -816,7 +816,7 @@ bool GSRendererHW::IsSplitTextureShuffle()
 		return false;
 
 	// X might be offset by up to -8/+8, but either the position or UV should be aligned.
-	GSVector4i aligned_rc = pos_rc.min_i32(tex_rc).blend32<12>(pos_rc.max_i32(tex_rc));
+	GSVector4i aligned_rc = pos_rc.min_i32(tex_rc).blend32<12>(pos_rc.max_i32(tex_rc)) & GSVector4i(~8);
 
 	// Check page alignment.
 	if (aligned_rc.x != 0 || (aligned_rc.z & (frame_psm.pgs.x - 1)) != 0 ||
@@ -1395,6 +1395,10 @@ void GSRendererHW::Draw()
 	u32 fm = context->FRAME.FBMSK;
 	u32 zm = context->ZBUF.ZMSK || context->TEST.ZTE == 0 ? 0xffffffff : 0;
 	const u32 fm_mask = GSLocalMemory::m_psm[m_context->FRAME.PSM].fmsk;
+	const u32 frame_needed_bits = GSUtil::GetWriteMask(context->FRAME.PSM, fm, false);
+	const u32 zbuf_needed_bits = GSUtil::GetWriteMask(context->ZBUF.PSM, 0, true);
+	GL_CACHE("FRAME PSM:%s FBMSK:%08X FMSK: %08X WBITS:%08X", psm_str(m_context->FRAME.PSM), fm, fm_mask, frame_needed_bits);
+	GL_CACHE("ZBUF PSM:%s ZMSK:%08X WBITS:%08X", psm_str(m_context->ZBUF.PSM), zm, zbuf_needed_bits);
 
 	// Note required to compute TryAlphaTest below. So do it now.
 	if (PRIM->TME && tex_psm.pal > 0)
@@ -1619,12 +1623,12 @@ void GSRendererHW::Draw()
 			if (is_zero_clear && OI_GsMemClear() && clear_height_valid)
 			{
 				g_texture_cache->InvalidateVideoMem(context->offset.fb, m_r, false, true);
-				g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, context->FRAME.Block());
+				g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, context->FRAME.Block(), frame_needed_bits);
 
 				if (m_context->ZBUF.ZMSK == 0)
 				{
 					g_texture_cache->InvalidateVideoMem(context->offset.zb, m_r, false, false);
-					g_texture_cache->InvalidateVideoMemType(GSTextureCache::DepthStencil, context->ZBUF.Block());
+					g_texture_cache->InvalidateVideoMemType(GSTextureCache::DepthStencil, context->ZBUF.Block(), zbuf_needed_bits);
 				}
 
 				return;
@@ -1989,10 +1993,6 @@ void GSRendererHW::Draw()
 		if (ds)
 			ds->m_TEX0 = ZBUF_TEX0;
 	}
-	if (rt)
-		rt->Update(true);
-	if (ds)
-		ds->Update(true);
 
 	const GSVector2i resolution = PCRTCDisplays.GetResolution();
 	GSTextureCache::Target* old_rt = nullptr;
@@ -2080,6 +2080,17 @@ void GSRendererHW::Draw()
 				}
 			}
 		}
+	}
+
+	if (rt)
+	{
+		rt->UpdateFromAliasedTargets(frame_needed_bits);
+		rt->Update(true);
+	}
+	if (ds)
+	{
+		ds->UpdateFromAliasedTargets(zbuf_needed_bits);
+		ds->Update(true);
 	}
 
 	if (src && src->m_shared_texture && src->m_texture != src->m_from_target->m_texture)
@@ -2209,9 +2220,9 @@ void GSRendererHW::Draw()
 
 	// Invalidation of old targets when changing to double-buffering.
 	if (old_rt)
-		g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, old_rt->m_TEX0.TBP0);
+		g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, old_rt->m_TEX0.TBP0, old_rt->m_valid_bits);
 	if (old_ds)
-		g_texture_cache->InvalidateVideoMemType(GSTextureCache::DepthStencil, old_ds->m_TEX0.TBP0);
+		g_texture_cache->InvalidateVideoMemType(GSTextureCache::DepthStencil, old_ds->m_TEX0.TBP0, old_ds->m_valid_bits);
 
 	//
 
@@ -2221,11 +2232,11 @@ void GSRendererHW::Draw()
 		// Limit to 2x the vertical height of the resolution (for double buffering)
 		rt->UpdateValidity(m_r, can_update_size || m_r.w <= (resolution.y * 2));
 
-		rt->UpdateValidBits(~fm & fm_mask);
+		rt->UpdateValidBits(frame_needed_bits);
 
 		g_texture_cache->InvalidateVideoMem(context->offset.fb, m_r, false, false);
 
-		g_texture_cache->InvalidateVideoMemType(GSTextureCache::DepthStencil, context->FRAME.Block());
+		g_texture_cache->InvalidateVideoMemType(GSTextureCache::DepthStencil, context->FRAME.Block(), frame_needed_bits);
 	}
 
 	if (zm != 0xffffffff && ds)
@@ -2234,11 +2245,11 @@ void GSRendererHW::Draw()
 		// Limit to 2x the vertical height of the resolution (for double buffering)
 		ds->UpdateValidity(m_r, can_update_size || m_r.w <= (resolution.y * 2));
 
-		ds->UpdateValidBits(GSLocalMemory::m_psm[context->ZBUF.PSM].fmsk);
+		ds->UpdateValidBits(zbuf_needed_bits);
 
 		g_texture_cache->InvalidateVideoMem(context->offset.zb, m_r, false, false);
 
-		g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, context->ZBUF.Block());
+		g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, context->ZBUF.Block(), zbuf_needed_bits);
 	}
 
 	// Restore modified offsets.

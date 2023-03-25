@@ -214,6 +214,7 @@ public:
 		GSVector4i m_valid{};
 		GSVector4i m_drawn_since_read{};
 		u32 m_valid_bits = 0;
+		u32 m_aliasing_bits = 0;
 		int readbacks_since_draw = 0;
 
 	public:
@@ -227,6 +228,7 @@ public:
 		void UpdateValidBits(u32 bits_written);
 
 		void Update(bool reset_age);
+		void UpdateFromAliasedTargets(u32 needed_bits);
 
 		/// Updates the target, if the dirty area intersects with the specified rectangle.
 		void UpdateIfDirtyIntersects(const GSVector4i& rc);
@@ -401,6 +403,7 @@ protected:
 	std::unique_ptr<GSDownloadTexture> m_uint32_download_texture;
 
 	Source* CreateSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, Target* t, bool half_right, int x_offset, int y_offset, const GSVector2i* lod, const GSVector4i* src_range, GSTexture* gpu_clut, SourceRegion region);
+	Source* CreateDepthSource(const GIFRegTEX0& TEX0, const GIFRegTEXA& TEXA, Target* t, bool palette);
 	Target* CreateTarget(const GIFRegTEX0& TEX0, int w, int h, float scale, int type, const bool clear);
 
 	/// Expands a target when the block pointer for a display framebuffer is within another target, but the read offset
@@ -455,7 +458,7 @@ public:
 	GSVector2i GetTargetSize(u32 bp, u32 fbw, u32 psm, s32 min_width, s32 min_height);
 	bool Has32BitTarget(u32 bp);
 
-	void InvalidateVideoMemType(int type, u32 bp);
+	void InvalidateVideoMemType(int type, u32 bp, u32 bits);
 	void InvalidateVideoMemSubTarget(GSTextureCache::Target* rt);
 	void InvalidateVideoMem(const GSOffset& off, const GSVector4i& r, bool eewrite = false, bool target = true);
 	void InvalidateLocalMem(const GSOffset& off, const GSVector4i& r);

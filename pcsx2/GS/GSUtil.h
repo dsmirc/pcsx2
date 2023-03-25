@@ -35,6 +35,9 @@ public:
 	static bool HasSameSwizzleBits(u32 spsm, u32 dpsm);
 	static u32 GetChannelMask(u32 spsm);
 
+	/// Returns the bits written for the specified draw, from the view of 32-bit space.
+	static u32 GetWriteMask(u32 psm, u32 fbmsk, bool z);
+
 	static CRCHackLevel GetRecommendedCRCHackLevel(GSRendererType type);
 	static GSRendererType GetPreferredRenderer();
 };

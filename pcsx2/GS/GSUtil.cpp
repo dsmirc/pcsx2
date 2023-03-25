@@ -16,6 +16,7 @@
 #include "PrecompiledHeader.h"
 #include "GS.h"
 #include "GSExtra.h"
+#include "GSLocalMemory.h"
 #include "GSUtil.h"
 #include "MultiISA.h"
 #include "common/StringUtil.h"
@@ -190,6 +191,32 @@ u32 GSUtil::GetChannelMask(u32 spsm)
 		default:
 			return 0xf;
 	}
+}
+
+u32 GSUtil::GetWriteMask(u32 psm, u32 fbmsk, bool z)
+{
+	const GSLocalMemory::psm_t& psm_s = GSLocalMemory::m_psm[psm];
+	if (z)
+	{
+		// 24-bit Z formats leave the top 8 bits unused, 16 and 32 bit write all 32.
+		return ((psm_s.trbpp == 24) ? 0xFFFFFF : 0xFFFFFFFF);
+	}
+	else if (psm_s.bpp != 16)
+	{
+		// 24 or 32-bit format takes fbmsk as-is, but 24-bit masks off the top 8 bits.
+		return (~fbmsk & psm_s.fmsk);
+	}
+
+	// Convert 32-bit FBMSK to 16-bit pixel mask.
+	const u32 m = ~fbmsk & psm_s.fmsk;
+	const u32 pmask = ((m >> 3) & 0x1F) | ((m >> 6) & 0x3E0) | ((m >> 9) & 0x7C00) | ((m >> 16) & 0x8000);
+
+	// Split into RB/GA - the first half of the pixels in the page write to RB, the second half to GA.
+	const GSVector2i rb_ga_mask = GSVector2i(pmask & 0xFF, (pmask >> 8) & 0xFF);
+
+	// Assume the draw is twice as large and all C16 pixels are covered, we can assume writes either half affect RG/BA.
+	return (static_cast<u32>(rb_ga_mask.x) | (static_cast<u32>(rb_ga_mask.y) << 8) |
+			(static_cast<u32>(rb_ga_mask.x << 16)) | (static_cast<u32>(rb_ga_mask.y << 24)));
 }
 
 CRCHackLevel GSUtil::GetRecommendedCRCHackLevel(GSRendererType type)
