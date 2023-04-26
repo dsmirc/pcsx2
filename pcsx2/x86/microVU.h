@@ -71,14 +71,14 @@ public:
 		for (microBlockLink* linkI = qBlockList; linkI != nullptr;)
 		{
 			microBlockLink* freeI = linkI;
-			safe_delete_array(linkI->block.jumpCache);
+			_aligned_free(linkI->block.jumpCache);
 			linkI = linkI->next;
 			_aligned_free(freeI);
 		}
 		for (microBlockLink* linkI = fBlockList; linkI != nullptr;)
 		{
 			microBlockLink* freeI = linkI;
-			safe_delete_array(linkI->block.jumpCache);
+			_aligned_free(linkI->block.jumpCache);
 			linkI = linkI->next;
 			_aligned_free(freeI);
 		}
@@ -253,6 +253,7 @@ struct microVU
 	u8* exitFunctXG;  // Function Ptr to the recompiler dispatcher (xgkick exit)
 	u8* waitMTVU;     // Ptr to function to save registers/sync VU1 thread
 	u8* copyPLState;  // Ptr to function to copy pipeline state into microVU
+	u8* compileJIT;   // Ptr to resolve an indirect branch
 	u8* resumePtrXG;  // Ptr to recompiled code position to resume xgkick
 	u32 code;         // Contains the current Instruction
 	u32 divFlag;      // 1 instance of I/D flags
@@ -266,6 +267,8 @@ struct microVU
 	u32 q;            // Holds current Q instance index
 	u32 totalCycles;  // Total Cycles that mVU is expected to run for
 	u32 cycles;       // Cycles Counter
+
+	microBlock* prevBlock; // Previous block when compiling an indirect branch.
 
 	VURegs& regs() const { return ::vuRegs[index]; }
 
@@ -288,8 +291,7 @@ extern void DumpVUState(u32 n, u32 pc);
 // Main Functions
 extern void mVUclear(mV, u32, u32);
 extern void mVUreset(microVU& mVU, bool resetReserve);
-extern void* mVUblockFetch(microVU& mVU, u32 startPC, uptr pState);
-_mVUt extern void* mVUcompileJIT(u32 startPC, uptr ptr);
+extern void* mVUblockFetch(microVU& mVU, u32 startPC, uptr pState, bool isInitialBlock, bool validateEntryPoint);
 
 // Prototypes for Linux
 extern void mVUcleanUpVU0();
@@ -300,7 +302,7 @@ mVUop(mVUopL);
 // Private Functions
 extern void mVUcacheProg(microVU& mVU, microProgram& prog);
 extern void mVUdeleteProg(microVU& mVU, microProgram*& prog);
-_mVUt extern void* mVUsearchProg(u32 startPC, uptr pState);
+_mVUt extern void* mVUsearchProg(u32 startPC, uptr pState, bool validateEntryPoint);
 extern void* mVUexecuteVU0(u32 startPC, u32 cycles);
 extern void* mVUexecuteVU1(u32 startPC, u32 cycles);
 

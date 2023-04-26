@@ -186,7 +186,7 @@ __fi void mVUbackupRegs(microVU& mVU, bool toMemory = false, bool onlyNeeded = f
 		const int stack_size = (num_xmms * sizeof(u128)) + ((num_gprs & 1) * sizeof(u64));
 		int stack_offset = 0;
 #endif
-		if (stack_size > 0)
+		if (stack_size > 0 && (num_gprs > 0 || num_xmms > 0))
 		{
 			xSUB(rsp, stack_size);
 			for (int i = 0; i < static_cast<int>(iREGCNT_XMM); i++)
@@ -258,7 +258,7 @@ __fi void mVUrestoreRegs(microVU& mVU, bool fromMemory = false, bool onlyNeeded 
 				stack_offset -= sizeof(u128);
 			}
 		}
-		if (stack_size > 0)
+		if (stack_size > 0 && (num_gprs > 0 || num_xmms > 0))
 			xADD(rsp, stack_size);
 
 		for (int i = static_cast<int>(iREGCNT_GPR - 1); i >= 0; i--)

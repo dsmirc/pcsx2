@@ -470,8 +470,7 @@ void mVUtestCycles(microVU& mVU, microFlagCycles& mFC)
 	else
 		xSUB(eax, 1); // Running ahead, make sure cycles left are above 0
 
-	xCMP(eax, 0);
-	xForwardJGE32 skip;
+	xForwardJNS32 skip;
 
 	u8* writeback = x86Ptr;
 	xLoadFarAddr(rax, x86Ptr);
@@ -534,7 +533,7 @@ __fi void mVUinitConstValues(microVU& mVU)
 }
 
 // Initialize Variables
-__fi void mVUinitFirstPass(microVU& mVU, uptr pState, u8* thisPtr)
+__fi void mVUinitFirstPass(microVU& mVU, uptr pState)
 {
 	mVUstartPC = iPC; // Block Start PC
 	mVUbranch  = 0;   // Branch Type
@@ -550,7 +549,6 @@ __fi void mVUinitFirstPass(microVU& mVU, uptr pState, u8* thisPtr)
 	{
 		memcpy((u8*)&mVU.prog.lpState, (u8*)pState, sizeof(microRegInfo));
 	}
-	mVUblock.x86ptrStart = thisPtr;
 	mVUpBlock = mVUblocks[mVUstartPC / 2]->add(&mVUblock); // Add this block to block manager
 	mVUregs.needExactMatch = (mVUpBlock->pState.blockType) ? 7 : 0; // ToDo: Fix 1-Op block flag linking (MGS2:Demo/Sly Cooper)
 	mVUregs.blockType = 0;
@@ -697,17 +695,16 @@ static void mvuPreloadRegisters(microVU& mVU, u32 endCount)
 	mVU.code = orig_code;
 }
 
-void* mVUcompile(microVU& mVU, u32 startPC, uptr pState)
+microBlock* mVUcompile(microVU& mVU, u32 startPC, uptr pState, bool isInitialBlock)
 {
 	microFlagCycles mFC;
-	u8* thisPtr = x86Ptr;
 	const u32 endCount = (((microRegInfo*)pState)->blockType) ? 1 : (mVU.microMemSize / 8);
 
 	// First Pass
 	iPC = startPC / 4;
 	mVUsetupRange(mVU, startPC, 1); // Setup Program Bounds/Range
 	mVU.regAlloc->reset(false);          // Reset regAlloc
-	mVUinitFirstPass(mVU, pState, thisPtr);
+	mVUinitFirstPass(mVU, pState);
 	mVUbranch = 0;
 	for (int branch = 0; mVUcount < endCount;)
 	{
@@ -850,7 +847,39 @@ void* mVUcompile(microVU& mVU, u32 startPC, uptr pState)
 	// Fix up vi15 const info for propagation through blocks
 	mVUregs.vi15 = (doConstProp && mVUconstReg[15].isValid) ? (u16)mVUconstReg[15].regValue : 0;
 	mVUregs.vi15v = (doConstProp && mVUconstReg[15].isValid) ? 1 : 0;
-	xMOV(ptr32[&mVU.regs().blockhasmbit], mVUregs.mbitinblock);
+
+	// TODO: blockhasmbit is unused
+	//xMOV(ptr32[&mVU.regs().blockhasmbit], mVUregs.mbitinblock);
+
+	// Compiling can happen recursively, so we need to back up the block we're compiling here
+	microBlock* thisBlock = mVUpBlock;
+
+	// Test if we were invalidated
+	if (isInitialBlock)
+	{
+		xAlignCallTarget();
+		mVUpBlock->x86ptrValidate = x86Ptr;
+		xMOV(gprT1q, ptrNative[&mVU.prog.quick[startPC / 8].prog]);
+		xLoadFarAddr(gprT2q, mVU.prog.cur);
+		xCMP(gprT1q, gprT2q);
+
+		// grab the block pointer which was saved before the jal
+		xForwardJE8 not_invalidated;
+		{
+			xMOV(arg1regd, startPC);
+			xMOV(arg2reg, ptr[&mVU.prevBlock]);
+			xJMP(mVU.compileJIT);
+		}
+		not_invalidated.SetTarget();
+	}
+	else
+	{
+		// No need to generate validation checks if we're not the first block.
+		mVUpBlock->x86ptrValidate = nullptr;
+	}
+
+	mVUpBlock->x86ptrStart = x86Ptr;
+
 	mVUsetFlags(mVU, mFC);           // Sets Up Flag instances
 	mVUoptimizePipeState(mVU);       // Optimize the End Pipeline State for nicer Block Linking
 	mVUdebugPrintBlocks(mVU, false); // Prints Start/End PC of blocks executed, for debugging...
@@ -997,23 +1026,25 @@ void* mVUcompile(microVU& mVU, u32 startPC, uptr pState)
 
 perf_and_return:
 
-	Perf::vu.map((uptr)thisPtr, x86Ptr - thisPtr, startPC);
+	const u8* startPtr = thisBlock->x86ptrValidate ? thisBlock->x86ptrValidate : thisBlock->x86ptrStart;
+	Perf::vu.map((uptr)startPtr, x86Ptr - startPtr, startPC);
 
-	return thisPtr;
+	return thisBlock;
 }
 
 // Returns the entry point of the block (compiles it if not found)
-__fi void* mVUentryGet(microVU& mVU, microBlockManager* block, u32 startPC, uptr pState)
+__fi void* mVUentryGet(microVU& mVU, microBlockManager* block, u32 startPC, uptr pState, bool isInitialBlock, bool validateEntryPoint)
 {
 	microBlock* pBlock = block->search((microRegInfo*)pState);
 	if (pBlock)
-		return pBlock->x86ptrStart;
-	else
-		return mVUcompile(mVU, startPC, pState);
+		return validateEntryPoint ? pBlock->x86ptrValidate : pBlock->x86ptrStart;
+
+	pBlock = mVUcompile(mVU, startPC, pState, isInitialBlock);
+	return validateEntryPoint ? pBlock->x86ptrValidate : pBlock->x86ptrStart;
 }
 
 // Search for Existing Compiled Block (if found, return x86ptr; else, compile and return x86ptr)
-__fi void* mVUblockFetch(microVU& mVU, u32 startPC, uptr pState)
+__fi void* mVUblockFetch(microVU& mVU, u32 startPC, uptr pState, bool isInitialBlock, bool validateEntryPoint)
 {
 
 	pxAssert((startPC & 7) == 0);
@@ -1021,43 +1052,5 @@ __fi void* mVUblockFetch(microVU& mVU, u32 startPC, uptr pState)
 	startPC &= mVU.microMemSize - 8;
 
 	blockCreate(startPC / 8);
-	return mVUentryGet(mVU, mVUblocks[startPC / 8], startPC, pState);
-}
-
-// mVUcompileJIT() - Called By JR/JALR during execution
-_mVUt void* mVUcompileJIT(u32 startPC, uptr ptr)
-{
-	if (doJumpAsSameProgram) // Treat jump as part of same microProgram
-	{
-		if (doJumpCaching) // When doJumpCaching, ptr is a microBlock pointer
-		{
-			microVU& mVU = mVUx;
-			microBlock* pBlock = (microBlock*)ptr;
-			microJumpCache& jc = pBlock->jumpCache[startPC / 8];
-			if (jc.prog && jc.prog == mVU.prog.quick[startPC / 8].prog)
-				return jc.x86ptrStart;
-			void* v = mVUblockFetch(mVUx, startPC, (uptr)&pBlock->pStateEnd);
-			jc.prog = mVU.prog.quick[startPC / 8].prog;
-			jc.x86ptrStart = v;
-			return v;
-		}
-		return mVUblockFetch(mVUx, startPC, ptr);
-	}
-	mVUx.regs().start_pc = startPC;
-	if (doJumpCaching) // When doJumpCaching, ptr is a microBlock pointer
-	{
-		microVU& mVU = mVUx;
-		microBlock* pBlock = (microBlock*)ptr;
-		microJumpCache& jc = pBlock->jumpCache[startPC / 8];
-		if (jc.prog && jc.prog == mVU.prog.quick[startPC / 8].prog)
-			return jc.x86ptrStart;
-		void* v = mVUsearchProg<vuIndex>(startPC, (uptr)&pBlock->pStateEnd);
-		jc.prog = mVU.prog.quick[startPC / 8].prog;
-		jc.x86ptrStart = v;
-		return v;
-	}
-	else // When !doJumpCaching, pBlock param is really a microRegInfo pointer
-	{
-		return mVUsearchProg<vuIndex>(startPC, ptr); // Find and set correct program
-	}
+	return mVUentryGet(mVU, mVUblocks[startPC / 8], startPC, pState, isInitialBlock, validateEntryPoint);
 }

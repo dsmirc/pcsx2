@@ -91,6 +91,7 @@ void mVUreset(microVU& mVU, bool resetReserve)
 	mVUdispatcherCD(mVU);
 	mvuGenerateWaitMTVU(mVU);
 	mvuGenerateCopyPipelineState(mVU);
+	mvuGenerateCompileJIT(mVU);
 	mVUemitSearch();
 
 	mVU.regs().nextBlockCycles = 0;
@@ -299,7 +300,7 @@ __fi bool mVUcmpProg(microVU& mVU, microProgram& prog)
 }
 
 // Searches for Cached Micro Program and sets prog.cur to it (returns entry-point to program)
-_mVUt __fi void* mVUsearchProg(u32 startPC, uptr pState)
+_mVUt __fi void* mVUsearchProg(u32 startPC, uptr pState, bool validateEntryPoint)
 {
 	microVU& mVU = mVUx;
 	microProgramQuick& quick = mVU.prog.quick[mVU.regs().start_pc / 8];
@@ -322,10 +323,10 @@ _mVUt __fi void* mVUsearchProg(u32 startPC, uptr pState)
 				// Sanity check, in case for some reason the program compilation aborted half way through (JALR for example)
 				if (quick.block == nullptr)
 				{
-					void* entryPoint = mVUblockFetch(mVU, startPC, pState);
+					void* entryPoint = mVUblockFetch(mVU, startPC, pState, true, validateEntryPoint);
 					return entryPoint;
 				}
-				return mVUentryGet(mVU, quick.block, startPC, pState);
+				return mVUentryGet(mVU, quick.block, startPC, pState, true, validateEntryPoint);
 			}
 		}
 
@@ -333,7 +334,7 @@ _mVUt __fi void* mVUsearchProg(u32 startPC, uptr pState)
 		mVU.prog.cleared = 0;
 		mVU.prog.isSame  = 1;
 		mVU.prog.cur     = mVUcreateProg(mVU, mVU.regs().start_pc/8);
-		void* entryPoint = mVUblockFetch(mVU,  startPC, pState);
+		void* entryPoint = mVUblockFetch(mVU,  startPC, pState, true, validateEntryPoint);
 		quick.block      = mVU.prog.cur->block[startPC/8];
 		quick.prog       = mVU.prog.cur;
 		list->push_front(mVU.prog.cur);
@@ -351,10 +352,10 @@ _mVUt __fi void* mVUsearchProg(u32 startPC, uptr pState)
 	// Sanity check, in case for some reason the program compilation aborted half way through
 	if (quick.block == nullptr)
 	{
-		void* entryPoint = mVUblockFetch(mVU, startPC, pState);
+		void* entryPoint = mVUblockFetch(mVU, startPC, pState, true, validateEntryPoint);
 		return entryPoint;
 	}
-	return mVUentryGet(mVU, quick.block, startPC, pState);
+	return mVUentryGet(mVU, quick.block, startPC, pState, true, validateEntryPoint);
 }
 
 //------------------------------------------------------------------

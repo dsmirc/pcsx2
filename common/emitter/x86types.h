@@ -655,6 +655,7 @@ extern const xAddressReg
 
 extern const xRegister32
     arg1regd, arg2regd,
+    arg3regd, arg4regd,
     calleeSavedReg1d,
     calleeSavedReg2d;
 

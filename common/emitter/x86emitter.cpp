@@ -180,6 +180,8 @@ const xAddressReg
 const xRegister32
     arg1regd = ecx,
     arg2regd = edx,
+    arg3regd = r8d,
+    arg4regd = r9d,
     calleeSavedReg1d = edi,
     calleeSavedReg2d = esi;
 #else
@@ -194,6 +196,8 @@ const xAddressReg
 const xRegister32
     arg1regd = edi,
     arg2regd = esi,
+    arg3regd = edx,
+    arg4regd = ecx,
     calleeSavedReg1d = r12d,
     calleeSavedReg2d = r13d;
 #endif

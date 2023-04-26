@@ -16,7 +16,7 @@
 #pragma once
 
 extern void mVUincCycles(microVU& mVU, int x);
-extern void* mVUcompile(microVU& mVU, u32 startPC, uptr pState);
+extern microBlock* mVUcompile(microVU& mVU, u32 startPC, uptr pState, bool isInitialBlock);
 __fi int getLastFlagInst(microRegInfo& pState, int* xFlag, int flagType, int isEbit)
 {
 	if (isEbit)
@@ -294,18 +294,27 @@ void normBranchCompile(microVU& mVU, u32 branchPC)
 	if (pBlock)
 		xJMP(pBlock->x86ptrStart);
 	else
-		mVUcompile(mVU, branchPC, (uptr)&mVUregs);
+		mVUcompile(mVU, branchPC, (uptr)&mVUregs, false);
 }
 
 void normJumpCompile(mV, microFlagCycles& mFC, bool isEvilJump)
 {
 	memcpy(&mVUpBlock->pStateEnd, &mVUregs, sizeof(microRegInfo));
 	mVUsetupBranch(mVU, mFC);
-	mVUbackupRegs(mVU);
 
 	if (!mVUpBlock->jumpCache) // Create the jump cache for this block
 	{
-		mVUpBlock->jumpCache = new microJumpCache[mProgSize / 2];
+		const u32 jcSize = (mVU.progSize * sizeof(u32)) / 8;
+		mVUpBlock->jumpCache = static_cast<void**>(_aligned_malloc(sizeof(void*) * jcSize, sizeof(__m128)));
+
+		const __m128i val = _mm_set1_epi64x(static_cast<u64>(reinterpret_cast<uintptr_t>(mVU.compileJIT)));
+		__m128i* fill_ptr = (__m128i*)(mVUpBlock->jumpCache);
+		__m128i* const fill_ptr_end = (__m128i*)(mVUpBlock->jumpCache + jcSize);
+		while (fill_ptr != fill_ptr_end)
+		{
+			_mm_store_si128(fill_ptr, val);
+			fill_ptr++;
+		}
 	}
 
 	if (isEvilJump)
@@ -316,10 +325,6 @@ void normJumpCompile(mV, microFlagCycles& mFC, bool isEvilJump)
 	}
 	else
 		xMOV(arg1regd, ptr32[&mVU.branch]);
-	if (doJumpCaching)
-		xLoadFarAddr(arg2reg, mVUpBlock);
-	else
-		xLoadFarAddr(arg2reg, &mVUpBlock->pStateEnd);
 
 	if (mVUup.eBit && isEvilJump) // E-bit EvilJump
 	{
@@ -330,15 +335,49 @@ void normJumpCompile(mV, microFlagCycles& mFC, bool isEvilJump)
 		if (mVU.index && THREAD_VU1)
 			xFastCall((void*)mVUEBit);
 		xJMP(mVU.exitFunct);
+		return;
 	}
 
-	if (!mVU.index)
-		xFastCall((void*)(void (*)())mVUcompileJIT<0>, arg1reg, arg2reg); //(u32 startPC, uptr pState)
-	else
-		xFastCall((void*)(void (*)())mVUcompileJIT<1>, arg1reg, arg2reg);
+	xLoadFarAddr(arg2reg, mVUpBlock);
 
-	mVUrestoreRegs(mVU);
-	xJMP(gprT1q); // Jump to rec-code address
+	if (!doJumpAsSameProgram)
+		xMOV(ptr32[&mVU.regs().start_pc], arg1regd);
+
+	if (doJumpCaching)
+	{
+		xMOV(ptrNative[&mVU.prevBlock], arg2reg); // for when we're jumping to an invalidated block
+		xMOV(arg3reg, ptrNative[arg2reg + offsetof(microBlock, jumpCache)]);
+		xJMP(ptrNative[arg3reg + arg1reg]); // Jump to rec-code address
+	}
+	else
+	{
+		xJMP(mVU.compileJIT);
+	}
+}
+
+// mVUcompileJIT() - Called By JR/JALR during execution
+void mvuGenerateCompileJIT(mV)
+{
+	xAlignCallTarget();
+	mVU.compileJIT = x86Ptr;
+
+	// regalloc should be clear, so this should only backup PQ
+	mVUbackupRegs(mVU, true, true);
+
+	xMOV(calleeSavedReg1, arg1reg); // save start pc
+	xMOV(calleeSavedReg2, ptrNative[arg2reg + offsetof(microBlock, jumpCache)]); // save block ptr
+
+	xADD(arg2reg, offsetof(microBlock, pStateEnd));
+	xMOV(arg3regd, 1);
+
+	xCALL((void*)(mVU.index ? &mVUsearchProg<1> : &mVUsearchProg<0>));
+
+	// save returned entry point to jump cache
+	xMOV(ptrNative[calleeSavedReg2 + calleeSavedReg1], rax);
+
+	mVUrestoreRegs(mVU, true, true);
+
+	xJMP(rax);
 }
 
 void normBranch(mV, microFlagCycles& mFC)
@@ -558,11 +597,11 @@ void condBranch(mV, microFlagCycles& mFC, int JMPcc)
 			memcpy(&pBlock->pStateEnd, &mVUregs, sizeof(microRegInfo));
 
 			incPC2(1); // Get PC for branch not-taken
-			mVUcompile(mVU, xPC, (uptr)&mVUregs);
+			mVUcompile(mVU, xPC, (uptr)&mVUregs, false);
 
 			iPC = bPC;
 			incPC(-3); // Go back to branch opcode (to get branch imm addr)
-			uptr jumpAddr = (uptr)mVUblockFetch(mVU, branchAddr(mVU), (uptr)&pBlock->pStateEnd);
+			uptr jumpAddr = (uptr)mVUblockFetch(mVU, branchAddr(mVU), (uptr)&pBlock->pStateEnd, false, false);
 			*ajmp = (jumpAddr - ((uptr)ajmp + 4));
 		}
 	}
