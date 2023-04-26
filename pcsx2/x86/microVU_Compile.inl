@@ -1026,8 +1026,14 @@ microBlock* mVUcompile(microVU& mVU, u32 startPC, uptr pState, bool isInitialBlo
 
 perf_and_return:
 
-	const u8* startPtr = thisBlock->x86ptrValidate ? thisBlock->x86ptrValidate : thisBlock->x86ptrStart;
-	Perf::vu.map((uptr)startPtr, x86Ptr - startPtr, startPC);
+	if (isInitialBlock)
+	{
+		const u8* startPtr = thisBlock->x86ptrValidate ? thisBlock->x86ptrValidate : thisBlock->x86ptrStart;
+		if (mVU.index)
+			Perf::vu1.map((uptr)startPtr, static_cast<u32>(x86Ptr - startPtr), startPC);
+		else
+			Perf::vu0.map((uptr)startPtr, static_cast<u32>(x86Ptr - startPtr), startPC);
+	}
 
 	return thisBlock;
 }

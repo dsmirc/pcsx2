@@ -533,7 +533,6 @@ static void recReserve()
 		return;
 
 	recMem = new RecompiledCodeReserve("R5900 Recompiler Cache");
-	recMem->SetProfilerName("EErec");
 	recMem->Assign(GetVmMemory().CodeMemory(), HostMemoryMap::EErecOffset, 64 * _1mb);
 }
 

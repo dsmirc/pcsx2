@@ -378,6 +378,9 @@ void mvuGenerateCompileJIT(mV)
 	mVUrestoreRegs(mVU, true, true);
 
 	xJMP(rax);
+
+	Perf::any.map((uptr)mVU.compileJIT, static_cast<u32>(xGetPtr() - mVU.compileJIT),
+		mVU.index ? "VU1CompileJIT" : "VU0CompileJIT");
 }
 
 void normBranch(mV, microFlagCycles& mFC)

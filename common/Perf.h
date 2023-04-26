@@ -57,6 +57,7 @@ namespace Perf
 	extern InfoVector any;
 	extern InfoVector ee;
 	extern InfoVector iop;
-	extern InfoVector vu;
+	extern InfoVector vu0;
+	extern InfoVector vu1;
 	extern InfoVector vif;
 } // namespace Perf

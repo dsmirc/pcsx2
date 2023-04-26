@@ -896,7 +896,6 @@ static void recReserve()
 		return;
 
 	recMem = new RecompiledCodeReserve("R3000A Recompiler Cache");
-	recMem->SetProfilerName("IOPrec");
 	recMem->Assign(GetVmMemory().CodeMemory(), HostMemoryMap::IOPrecOffset, 32 * _1mb);
 }
 
