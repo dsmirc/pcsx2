@@ -402,8 +402,9 @@ const xRegister32
 			}
 			else
 			{
-				if (info.Base == rbp && displacement_size == 0)
-					displacement_size = 1; // forces [ebp] to be encoded as [ebp+0]!
+				// Using RBP or R13 without displacement must be done using mod = 01 with a displacement of 0.
+				if ((info.Base.GetId() == rbp.GetId() || info.Base.GetId() == r13.GetId()) && displacement_size == 0)
+					displacement_size = 1;
 
 				ModRM(displacement_size, regfield, ModRm_UseSib);
 				SibSB(info.Scale, info.Index.Id & 7, info.Base.Id & 7);
