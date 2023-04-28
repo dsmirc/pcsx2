@@ -1442,10 +1442,10 @@ void GSDeviceMTL::ClearRenderTarget(GSTexture* t, uint32 c)
 	ClearRenderTarget(t, color);
 }
 
-void GSDeviceMTL::ClearDepth(GSTexture* t)
+void GSDeviceMTL::ClearDepth(GSTexture* t, float d)
 {
 	if (!t) return;
-	t->SetClearDepth(0);
+	t->SetClearDepth(d);
 }
 
 void GSDeviceMTL::InvalidateRenderTarget(GSTexture* t)
