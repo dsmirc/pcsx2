@@ -46,7 +46,7 @@ private:
 	bool OI_BlitFMV(GSTextureCache::Target* _rt, GSTextureCache::Source* t, const GSVector4i& r_draw);
 	bool OI_GsMemClear(); // always on
 	void OI_DoGsMemClear(const GSOffset& off, const GSVector4i& r, u32 vert_color);
-	void OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds); // always on
+	bool OI_EarlyDetectDoubleHalfClear(bool& no_rt, bool& no_ds);
 	bool OI_TargetClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds);
 
 	u16 Interpolate_UV(float alpha, int t0, int t1);

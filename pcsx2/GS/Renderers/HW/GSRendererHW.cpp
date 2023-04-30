@@ -1633,14 +1633,14 @@ void GSRendererHW::Draw()
 	// 3/ 50cents really draws (0,0,0,128) color and a (0) 24 bits depth
 	// Note: FF DoC has both buffer at same location but disable the depth test (write?) with ZTE = 0
 	const u32 max_z = (0xFFFFFFFF >> (GSLocalMemory::m_psm[m_cached_ctx.ZBUF.PSM].fmt * 8));
-	const bool no_rt = (context->ALPHA.IsCd() && PRIM->ABE && (m_cached_ctx.FRAME.PSM == 1))
+	bool no_rt = (context->ALPHA.IsCd() && PRIM->ABE && (m_cached_ctx.FRAME.PSM == 1))
 						|| (!m_cached_ctx.TEST.DATE && (m_cached_ctx.FRAME.FBMSK & GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmsk) == GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmsk);
 	const bool all_depth_tests_pass =
 		// Depth is always pass/fail (no read) and write are discarded.
 		(!m_cached_ctx.TEST.ZTE || m_cached_ctx.TEST.ZTST <= ZTST_ALWAYS) ||
 		// Depth test will always pass
 		(m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(m_vertex.buff[0].XYZ.Z, max_z) == max_z);
-	const bool no_ds = (zm != 0 && all_depth_tests_pass) ||
+	bool no_ds = (zm != 0 && all_depth_tests_pass) ||
 					   // Depth will be written through the RT
 					   (!no_rt && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && !PRIM->TME && zm == 0 && (fm & fm_mask) == 0 && m_cached_ctx.TEST.ZTE);
 
@@ -1672,6 +1672,11 @@ void GSRendererHW::Draw()
 	// The rectangle of the draw rounded up.
 	const GSVector4 rect = m_vt.m_min.p.upld(m_vt.m_max.p + GSVector4::cxpr(0.5f));
 	m_r = GSVector4i(rect).rintersect(context->scissor.in);
+
+	// TODO HACK: this is moved up here because of the draw order of double half clears..
+	// We want to fix up the context if we're doing a double half clear, regardless of whether we do the CPU fill.
+	const bool is_possible_mem_clear = IsConstantDirectWriteMemClear();
+	const bool double_half_clear = is_possible_mem_clear && OI_EarlyDetectDoubleHalfClear(no_rt, no_ds);
 
 	const bool process_texture = PRIM->TME && !(PRIM->ABE && m_context->ALPHA.IsBlack() && !m_cached_ctx.TEX0.TCC);
 	const u32 frame_end_bp = GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].info.bn(m_r.z - 1, m_r.w - 1, m_cached_ctx.FRAME.Block(), m_cached_ctx.FRAME.FBW);
@@ -1773,8 +1778,6 @@ void GSRendererHW::Draw()
 		cleanup_draw();
 	};
 
-	const bool is_possible_mem_clear = IsConstantDirectWriteMemClear();
-
 	if (!GSConfig.UserHacks_DisableSafeFeatures)
 	{
 		if (is_possible_mem_clear)
@@ -1824,7 +1827,7 @@ void GSRendererHW::Draw()
 								  !g_texture_cache->GetExactTarget(m_cached_ctx.FRAME.Block(), m_cached_ctx.FRAME.FBW, GSTextureCache::DepthStencil, target_end);
 			}
 
-			if (is_zero_clear && OI_GsMemClear() && (clear_height_valid || (!req_z && no_target_found)))
+			if (is_zero_clear && (OI_GsMemClear() || double_half_clear) && (clear_height_valid || (!req_z && no_target_found)))
 			{
 				GL_INS("Clear draw with mem clear and valid clear height, invalidating.");
 
@@ -5097,175 +5100,86 @@ bool GSRendererHW::CanUseSwPrimRender(bool no_rt, bool no_ds, bool draw_sprite_t
 	return true;
 }
 
-// Trick to do a fast clear on the GS
-// Set frame buffer pointer on the start of the buffer. Set depth buffer pointer on the half buffer
-// FB + depth write will fill the full buffer.
-void GSRendererHW::OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds)
+bool GSRendererHW::OI_EarlyDetectDoubleHalfClear(bool& no_rt, bool& no_ds)
 {
-	// Note gs mem clear must be tested before calling this function
+	if (m_cached_ctx.FRAME.FBMSK != 0 || m_cached_ctx.TEST.ZTST != ZTST_ALWAYS || m_cached_ctx.ZBUF.ZMSK)
+		return false;
 
-	// If the mask is on any of the colour or partial alpha, keep the whole channel
-	const bool keep_a = (m_cached_ctx.FRAME.FBMSK >> 24) & 0xFF;
-	const bool keep_b = (m_cached_ctx.FRAME.FBMSK >> 16) & 0xFF;
-	const bool keep_g = (m_cached_ctx.FRAME.FBMSK >> 8) & 0xFF;
-	const bool keep_r = m_cached_ctx.FRAME.FBMSK & 0xFF;
+	// Z and color must be constant and the same
+	// TODO: move covers check to caller
+	GSVertex* v = &m_vertex.buff[0];
+	if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z || v[1].XYZ.Z != v[1].RGBAQ.U32[0])
+		return false;
 
-	// Limit further to unmask Z write
-	if (!m_cached_ctx.ZBUF.ZMSK && rt && ds)
+	// Frame and depth pointer can be inverted
+	const bool clear_depth = (m_cached_ctx.FRAME.FBP > m_cached_ctx.ZBUF.ZBP);
+	const u32 base = clear_depth ? m_cached_ctx.ZBUF.ZBP : m_cached_ctx.FRAME.FBP;
+	const u32 half = clear_depth ? m_cached_ctx.FRAME.FBP : m_cached_ctx.ZBUF.ZBP;
+
+	// Size of the current draw
+	const GSLocalMemory::psm_t& frame_psm = GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM];
+	const u32 w_pages = static_cast<u32>(roundf(m_vt.m_max.p.x / frame_psm.pgs.x));
+	const u32 h_pages = static_cast<u32>(roundf(m_vt.m_max.p.y / frame_psm.pgs.y));
+	const u32 written_pages = w_pages * h_pages;
+
+	// If both buffers are side by side we can expect a fast clear in on-going
+	if (half != (base + written_pages))
+		return false;
+
+	// Check for a target matching the starting point. It might be in Z or FRAME...
+	GSTextureCache::Target* tgt = g_texture_cache->GetExactTarget(
+		base << 5, m_cached_ctx.FRAME.FBW, clear_depth ? GSTextureCache::DepthStencil : GSTextureCache::RenderTarget, 0);
+	if (!tgt)
 	{
-		const GSVertex* v = &m_vertex.buff[0];
-		const GSLocalMemory::psm_t& frame_psm = GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM];
-		//const GSLocalMemory::psm_t& depth_psm = GSLocalMemory::m_psm[m_ZBUF.PSM];
-
-		// Z and color must be constant and the same
-		if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z || v[1].XYZ.Z != v[1].RGBAQ.U32[0])
-			return;
-
-		// Format doesn't have the same size. It smells fishy (xmen...)
-		//if (frame_psm.trbpp != depth_psm.trbpp)
-		//	return;
-
-		// Size of the current draw
-		const u32 w_pages = static_cast<u32>(roundf(m_vt.m_max.p.x / frame_psm.pgs.x));
-		const u32 h_pages = static_cast<u32>(roundf(m_vt.m_max.p.y / frame_psm.pgs.y));
-		const u32 written_pages = w_pages * h_pages;
-
-		// Frame and depth pointer can be inverted
-		u32 base = 0, half = 0;
-		if (m_cached_ctx.FRAME.FBP > m_cached_ctx.ZBUF.ZBP)
-		{
-			base = m_cached_ctx.ZBUF.ZBP;
-			half = m_cached_ctx.FRAME.FBP;
-		}
-		else
-		{
-			base = m_cached_ctx.FRAME.FBP;
-			half = m_cached_ctx.ZBUF.ZBP;
-		}
-
-		// If both buffers are side by side we can expect a fast clear in on-going
-		if (half <= (base + written_pages))
-		{
-			// Take the vertex colour, but check if the blending would make it black.
-			u32 vert_color = v[1].RGBAQ.U32[0];
-			if (PRIM->ABE && m_context->ALPHA.IsBlack())
-				vert_color &= 0xFF000000;
-			const u32 color = vert_color;
-			const bool clear_depth = (m_cached_ctx.FRAME.FBP > m_cached_ctx.ZBUF.ZBP);
-
-			GL_INS("OI_DoubleHalfClear:%s: base %x half %x. w_pages %d h_pages %d fbw %d. Color %x",
-				clear_depth ? "depth" : "target", base << 5, half << 5, w_pages, h_pages, m_cached_ctx.FRAME.FBW, color);
-
-			// If some of the channels are masked, we need to keep them.
-			if (!clear_depth && m_cached_ctx.FRAME.FBMSK != 0)
-			{
-				GSTexture* tex = nullptr;
-				GSTextureCache::Target* target = clear_depth ? ds : rt;
-				const GSVector2 size = GSVector2(static_cast<float>(target->GetUnscaledWidth()) * target->m_scale, static_cast<float>(target->GetUnscaledHeight()) * target->m_scale);
-				pxAssert(!target->m_texture->IsDepthStencil());
-				try
-				{
-					tex = g_gs_device->CreateRenderTarget(size.x, size.y, target->m_texture->GetFormat(), false);
-				}
-				catch (const std::bad_alloc&)
-				{
-				}
-
-				if (!tex)
-				{
-					Console.Error("(ResizeTexture) Failed to allocate %dx%d texture", size.x, size.y);
-					return;
-				}
-
-				if (clear_depth)
-				{
-					// Only pure clear are supported for depth
-					ASSERT(color == 0);
-					g_gs_device->ClearDepth(tex, 0.0f);
-				}
-				else
-				{
-					g_gs_device->ClearRenderTarget(tex, color);
-				}
-				const GSVector4 drect = GSVector4(target->GetUnscaledRect()) * GSVector4(target->m_scale);
-
-				// Copy channels being masked.
-				g_gs_device->StretchRect(target->m_texture, GSVector4(0.0f,0.0f,1.0f,1.0f), tex, drect, keep_r, keep_g, keep_b, keep_a);
-				g_perfmon.Put(GSPerfMon::TextureCopies, 1);
-				delete target->m_texture;
-
-				target->m_texture = tex;
-				target->UpdateValidity(target->GetUnscaledRect());
-			}
-			else
-			{
-				if (clear_depth)
-				{
-					// Only pure clear are supported for depth
-					ASSERT(color == 0);
-					g_gs_device->ClearDepth(ds->m_texture, 0.0f);
-					ds->UpdateValidity(ds->GetUnscaledRect());
-				}
-				else
-				{
-					g_gs_device->ClearRenderTarget(rt->m_texture, color);
-					rt->UpdateValidity(rt->GetUnscaledRect());
-				}
-			}
-		}
+		tgt = g_texture_cache->GetExactTarget(base << 5, m_cached_ctx.FRAME.FBW,
+			clear_depth ? GSTextureCache::RenderTarget : GSTextureCache::DepthStencil, 0);
 	}
 
-	// Striped double clear done by Powerdrome and Snoopy Vs Red Baron, it will clear in 32 pixel stripes half done by the Z and half done by the FRAME
-	else if (rt && !ds && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && (m_cached_ctx.FRAME.PSM & 0x30) != (m_cached_ctx.ZBUF.PSM & 0x30)
-			&& (m_cached_ctx.FRAME.PSM & 0xF) == (m_cached_ctx.ZBUF.PSM & 0xF) && m_vt.m_eq.z == 1)
+	// Are we clearing over the middle of this target?
+	if (!tgt || (((half + written_pages) << 5) - 1) > tgt->m_end_block)
+		return false;
+
+	GL_INS("EarlyDetectDoubleHalfClear(): fbp=%x, zbp=%x, pages=%u, base=%x, half=%x, depth=%s",
+		m_cached_ctx.FRAME.Block(), m_cached_ctx.ZBUF.Block(), written_pages, base << 5, half << 5,
+		clear_depth ? "true" : "false");
+
+	// Double the clear rect.
+	m_r.w += m_r.y + m_r.height();
+	m_context->scissor.in = m_r;
+
+	// And replace the vertex with a fullscreen quad.
+	const GSVector4i fpr = m_r.sll32(4);
+	v[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.x);
+	v[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.y);
+	v[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.z);
+	v[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.w);
+
+	// Prevent wasting time looking up and creating the target which is getting blown away.
+	if (tgt->m_type == GSTextureCache::RenderTarget)
 	{
-		const GSVertex* v = &m_vertex.buff[0];
-
-		// Z and color must be constant and the same
-		if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z || v[1].XYZ.Z != v[1].RGBAQ.U32[0])
-			return;
-
-		// If both buffers are side by side we can expect a fast clear in on-going
-		const u32 color = v[1].RGBAQ.U32[0];
-
-		// If some of the channels are masked, we need to keep them.
-		if (m_cached_ctx.FRAME.FBMSK != 0)
-		{
-			GSTexture* tex = nullptr;
-			GSTextureCache::Target* target = rt;
-			const GSVector2 size = GSVector2(static_cast<float>(target->GetUnscaledWidth()) * target->m_scale, static_cast<float>(target->GetUnscaledHeight()) * target->m_scale);
-			try
-			{
-				tex = g_gs_device->CreateRenderTarget(size.x, size.y, target->m_texture->GetFormat(), true);
-			}
-			catch (const std::bad_alloc&)
-			{
-			}
-
-			if (!tex)
-			{
-				Console.Error("(ResizeTexture) Failed to allocate %dx%d texture", size.x, size.y);
-				return;
-			}
-
-			g_gs_device->ClearRenderTarget(tex, color);
-
-			const GSVector4 drect = GSVector4(target->GetUnscaledRect()) * GSVector4(target->m_scale);
-
-			// Copy channels being masked.
-			g_gs_device->StretchRect(target->m_texture, GSVector4(0, 0, 1, 1), tex, drect, keep_r, keep_g, keep_b, keep_a);
-			g_perfmon.Put(GSPerfMon::TextureCopies, 1);
-			delete target->m_texture;
-
-			target->m_texture = tex;
-			target->UpdateValidity(target->GetUnscaledRect());
-		}
-		else
-		{
-			g_gs_device->ClearRenderTarget(rt->m_texture, color);
-			rt->UpdateValidity(rt->GetUnscaledRect());
-		}
+		GL_INS("EarlyDetectDoubleHalfClear(): Clearing existing RT at %x, changing target new rect (%d,%d,%d,%d)",
+			tgt->m_TEX0.TBP0, m_r.x, m_r.y, m_r.z, m_r.w);
+		m_cached_ctx.FRAME.FBP = tgt->m_TEX0.TBP0 >> 5;
+		m_cached_ctx.FRAME.PSM = tgt->m_TEX0.PSM;
+		m_cached_ctx.ZBUF.ZMSK = true;
+		no_rt = false;
+		no_ds = true;
 	}
+	else
+	{
+		GL_INS("EarlyDetectDoubleHalfClear(): Clearing existing DS at %x, changing target, new rect (%d,%d,%d,%d)",
+			tgt->m_TEX0.TBP0, m_r.x, m_r.y, m_r.z, m_r.w);
+		m_cached_ctx.ZBUF.ZBP = tgt->m_TEX0.TBP0 >> 5;
+		m_cached_ctx.ZBUF.PSM = tgt->m_TEX0.PSM;
+		m_cached_ctx.FRAME.FBMSK = 0xFFFFFFFF;
+		no_rt = true;
+		no_ds = false;
+	}
+
+	// TODO HACK: REMOVE ME
+	m_primitive_covers_without_gaps = true;
+
+	return true;
 }
 
 bool GSRendererHW::OI_TargetClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds)
