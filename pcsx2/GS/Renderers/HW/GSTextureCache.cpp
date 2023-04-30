@@ -1461,14 +1461,13 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 
 		if (TEX0.TBW > 0 && supported_fmt)
 		{
-			const bool forced_preload = GSRendererHW::GetInstance()->m_force_preload > 0;
 			const GSVector4i newrect = GSVector4i::loadh(size);
 			const u32 rect_end = GSLocalMemory::m_psm[TEX0.PSM].info.bn(newrect.z - 1, newrect.w - 1, TEX0.TBP0, TEX0.TBW);
 			RGBAMask rgba;
 			rgba._u32 = GSUtil::GetChannelMask(TEX0.PSM);
 			dst->UpdateValidity(newrect);
 
-			if (!is_frame && !forced_preload && !preload)
+			if (!is_frame && !preload)
 			{
 				if (preload_uploads)
 				{

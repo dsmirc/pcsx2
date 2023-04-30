@@ -92,15 +92,11 @@ float GSRendererHW::GetUpscaleMultiplier()
 
 void GSRendererHW::Reset(bool hardware_reset)
 {
-	// Force targets to preload for 2 frames (for 30fps games).
-	static constexpr u8 TARGET_PRELOAD_FRAMES = 2;
-
 	// Read back on CSR Reset, conditional downloading on render swap etc handled elsewhere.
 	if (!hardware_reset)
 		g_texture_cache->ReadbackAll();
 
 	g_texture_cache->RemoveAll();
-	m_force_preload = TARGET_PRELOAD_FRAMES;
 
 	GSRenderer::Reset(hardware_reset);
 }
@@ -114,24 +110,7 @@ void GSRendererHW::UpdateSettings(const Pcsx2Config::GSOptions& old_config)
 
 void GSRendererHW::VSync(u32 field, bool registers_written, bool idle_frame)
 {
-	if (m_force_preload > 0)
-	{
-		m_force_preload--;
-		if (m_force_preload == 0)
-		{
-			for (auto iter = m_draw_transfers.begin(); iter != m_draw_transfers.end();)
-			{
-				if ((s_n - iter->draw) > 5)
-					iter = m_draw_transfers.erase(iter);
-				else
-				{
-					iter++;
-				}
-			}
-		}
-	}
-	else
-		m_draw_transfers.clear();
+	m_draw_transfers.clear();
 
 	if (GSConfig.LoadTextureReplacements)
 		GSTextureReplacements::ProcessAsyncLoadedTextures();
