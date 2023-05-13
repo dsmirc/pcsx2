@@ -633,6 +633,169 @@ bool GSHwHack::GSC_PolyphonyDigitalGames(GSRendererHW& r, int& skip)
 	return true;
 }
 
+bool GSHwHack::GSC_Steambot(GSRendererHW& r, int& skip)
+{
+	const int DRAWS_PER_PAGE = 12;
+
+	static u32 state = 0;
+	static GIFRegTEX0 source = {};
+	static int source_type = 0;
+	static GIFRegTEX0 temp = {};
+	static GSVector4i rect;
+	static u32 draws_to_skip = 0;
+
+	if (skip != 0)
+		return true;
+
+	switch (state)
+	{
+		case 0: // detect
+		{
+			// Texture shuffle -> offset by 2 copy
+			if (r.m_backed_up_ctx < 0 || !RTME || RFPSM != PSMCT16S || RTPSM != PSMCT16S ||
+				r.m_env.CTXT[r.m_backed_up_ctx].TEX0.TBP0 != RFBP)
+			{
+				return false;
+			}
+
+			// I don't like this assumption...
+			constexpr u32 BW = 10;
+
+			// make sure the source actually exists, prevent false positives
+			GSTextureCache::Target* src = g_texture_cache->GetExactTarget(RTBP0, BW, GSTextureCache::RenderTarget);
+			if (!src)
+			{
+				src = g_texture_cache->GetExactTarget(RTBP0, BW, GSTextureCache::DepthStencil);
+				if (!src)
+					return false;
+			}
+
+			source = src->m_TEX0;
+			source_type = src->m_type;
+			rect = src->m_valid;
+
+			const int pages_wide = source.TBW;
+			const int pages_high = src->m_valid.height() / 32;
+			draws_to_skip = ((pages_wide * pages_high) - 1) * DRAWS_PER_PAGE;
+
+			// first draw: unswizzle depth, copy RB->RB, skip
+			// second draw: copy depth offset by 2 pixels high, skip
+			skip = 2;
+			state = 1;
+		}
+		break;
+
+		case 1: // channel shuffle, reading blue
+		case 2: // channel shuffle, reading green
+		{
+			GL_PUSH("GSC_Steambot: Channel shuffle, reading %s", (state == 1) ? "blue" : "green");
+
+			// annoyingly, we have to split these into two draws, because we need the palette..
+			GSTextureCache::Target* src = g_texture_cache->GetExactTarget(source.TBP0, source.TBW, source_type);
+			if (!src)
+				return false;
+
+			temp.TBP0 = RFBP;
+			temp.PSM = PSMCT32;
+			temp.TBW = source.TBW;
+
+			GSTextureCache::Target* dst = g_texture_cache->LookupTarget(
+				temp, src->GetUnscaledSize(), src->GetScale(), GSTextureCache::RenderTarget);
+			dst->m_valid_alpha = true;
+			if (!dst)
+				return false;
+
+			// have to set up the palette ourselves too, since GSC executes before it does
+			r.m_mem.m_clut.Read32(RTEX0, r.m_draw_env->TEXA);
+			std::shared_ptr<GSTextureCache::Palette> palette =
+				g_texture_cache->LookupPaletteObject(GSLocalMemory::m_psm[RTEX0.PSM].pal, true);
+			if (!palette)
+				return false;
+
+			GSHWDrawConfig& config = r.BeginHLEHardwareDraw(
+				dst->GetTexture(), nullptr, dst->GetScale(), src->GetTexture(), src->GetScale(), rect);
+			config.pal = palette->GetPaletteGSTexture();
+			config.ps.channel = (state == 1) ? ChannelFetch_BLUE : ChannelFetch_GREEN;
+			config.ps.depth_fmt = (src->m_type == GSTextureCache::DepthStencil) ? 1 : 0;
+			if (state == 2)
+			{
+				config.blend.enable = true;
+				config.blend.op = GSDevice::OP_ADD;
+				config.blend.src_factor = GSDevice::CONST_ONE;
+				config.blend.dst_factor = GSDevice::CONST_ONE;
+			}
+
+			r.EndHLEHardwareDraw(false);
+
+			// dunno how it's getting dirty...
+			dst->m_dirty.clear();
+
+			// two parts for each shuffle
+			skip = 2;
+			state++;
+		}
+		break;
+
+		case 3: // texture shuffle to alpha
+		{
+			GL_INS("GSC_Steambot: Channel shuffle from temp to alpha");
+
+			RFRAME.FBP = temp.TBP0 >> 5;
+			RFRAME.FBW = temp.TBW;
+			RFRAME.FBMSK = 0x3fff;
+			RTEX0.TBP0 = temp.TBP0;
+			RTEX0.TBW = temp.TBW;
+
+			r.ReplaceVerticesWithSprite(
+				rect + GSVector4i::cxpr(8, 0, 8, 0), rect, GSVector2i(rect.width(), rect.height()), rect);
+			state++;
+		}
+		break;
+
+		case 4: // P8H sample x 2
+		case 6:
+		{
+			GL_INS("GSC_Steambot: Apply palette");
+
+			RTEX0.TBP0 = temp.TBP0;
+			RTEX0.TBW = temp.TBW;
+			r.ReplaceVerticesWithSprite(rect, GSVector2i(rect.width(), rect.height()));
+			state++;
+		}
+		break;
+
+		case 5: // blended draws
+		case 7:
+		case 8:
+		{
+			GL_INS("GSC_Steambot: Blend to FB");
+
+			r.ReplaceVerticesWithSprite(rect, GSVector2i(rect.width(), rect.height()));
+			state++;
+
+			if (state == 9)
+			{
+				// we're done! skip the rest of the pages...
+				skip = draws_to_skip;
+
+				// better kill the temp target, it's wrapping around the end of GS memory, since we pretended it was larger..
+				g_texture_cache->InvalidateVideoMemType(GSTextureCache::RenderTarget, temp.TBP0);
+
+				// and wipe our state, so we don't get confused
+				state = 0;
+				source = {};
+				source_type = 0;
+				temp = {};
+				rect = GSVector4i::zero();
+				draws_to_skip = 0;
+			}
+		}
+		break;
+	}
+
+	return true;
+}
+
 bool GSHwHack::GSC_BlueTongueGames(GSRendererHW& r, int& skip)
 {
 	GSDrawingContext* context = r.m_context;
@@ -1111,6 +1274,8 @@ void GSRendererHW::UpdateCRCHacks()
 			m_oi = GSHwHack::s_before_draw_functions[GSConfig.BeforeDrawFunctionId].ptr;
 		}
 	}
+
+	m_gsc = &GSHwHack::GSC_Steambot;
 }
 
 bool GSRendererHW::IsBadFrame()
