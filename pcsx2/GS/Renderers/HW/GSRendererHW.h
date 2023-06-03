@@ -47,6 +47,7 @@ private:
 	bool OI_GsMemClear(); // always on
 	void OI_DoGsMemClear(const GSOffset& off, const GSVector4i& r, u32 vert_color);
 	void OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds); // always on
+	bool OI_TargetClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds);
 
 	u16 Interpolate_UV(float alpha, int t0, int t1);
 	float alpha0(int L, int X0, int X1);

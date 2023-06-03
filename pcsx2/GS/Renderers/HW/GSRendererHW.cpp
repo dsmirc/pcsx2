@@ -1635,13 +1635,14 @@ void GSRendererHW::Draw()
 	const u32 max_z = (0xFFFFFFFF >> (GSLocalMemory::m_psm[m_cached_ctx.ZBUF.PSM].fmt * 8));
 	const bool no_rt = (context->ALPHA.IsCd() && PRIM->ABE && (m_cached_ctx.FRAME.PSM == 1))
 						|| (!m_cached_ctx.TEST.DATE && (m_cached_ctx.FRAME.FBMSK & GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmsk) == GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmsk);
-	const bool no_ds = (
+	const bool all_depth_tests_pass =
 		// Depth is always pass/fail (no read) and write are discarded.
-		(zm != 0 && (!m_cached_ctx.TEST.ZTE || m_cached_ctx.TEST.ZTST <= ZTST_ALWAYS)) ||
+		(!m_cached_ctx.TEST.ZTE || m_cached_ctx.TEST.ZTST <= ZTST_ALWAYS) ||
 		// Depth test will always pass
-		(zm != 0 && m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(m_vertex.buff[0].XYZ.Z, max_z) == max_z) ||
-		// Depth will be written through the RT
-		(!no_rt && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && !PRIM->TME && zm == 0 && (fm & fm_mask) == 0 && m_cached_ctx.TEST.ZTE));
+		(m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(m_vertex.buff[0].XYZ.Z, max_z) == max_z);
+	const bool no_ds = (zm != 0 && all_depth_tests_pass) ||
+					   // Depth will be written through the RT
+					   (!no_rt && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && !PRIM->TME && zm == 0 && (fm & fm_mask) == 0 && m_cached_ctx.TEST.ZTE);
 
 	// No Z test if no z buffer.
 	if (no_ds)
@@ -1674,6 +1675,10 @@ void GSRendererHW::Draw()
 
 	const bool process_texture = PRIM->TME && !(PRIM->ABE && m_context->ALPHA.IsBlack() && !m_cached_ctx.TEX0.TCC);
 	const u32 frame_end_bp = GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].info.bn(m_r.z - 1, m_r.w - 1, m_cached_ctx.FRAME.Block(), m_cached_ctx.FRAME.FBW);
+	const bool preserve_rt_color = (((fm & fm_mask) != 0) || // Some channels masked
+							  !IsDiscardingDstColor() || !PrimitiveCoversWithoutGaps() || // Using Dst Color or draw has gaps
+							  (process_texture && m_cached_ctx.TEX0.TBP0 >= m_cached_ctx.FRAME.Block() && m_cached_ctx.TEX0.TBP0 < frame_end_bp)); // Tex is RT
+
 	// SW CLUT Render enable.
 	bool force_preload = GSConfig.PreloadFrameWithGSData;
 	bool preload_uploads = false;
@@ -1701,11 +1706,9 @@ void GSRendererHW::Draw()
 			}
 		}
 	}
-	else if (((fm & fm_mask) != 0) || // Some channels masked
-		!IsDiscardingDstColor() || !PrimitiveCoversWithoutGaps() || // Using Dst Color or draw has gaps
-		(process_texture && m_cached_ctx.TEX0.TBP0 >= m_cached_ctx.FRAME.Block() && m_cached_ctx.TEX0.TBP0 < frame_end_bp)) // Tex is RT
+	else
 	{
-		preload_uploads = true;
+		preload_uploads = preserve_rt_color;
 	}
 
 	if (!m_channel_shuffle && m_cached_ctx.FRAME.Block() == m_cached_ctx.TEX0.TBP0 &&
@@ -1807,7 +1810,7 @@ void GSRendererHW::Draw()
 			// on. So, instead, let the draw go through with the expanded rectangle, and copy color->depth.
 			const bool is_zero_clear = (((GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmt == 0) ?
 				m_vertex.buff[1].RGBAQ.U32[0] :
-				(m_vertex.buff[1].RGBAQ.U32[0] & ~0xFF000000)) == 0) && m_cached_ctx.FRAME.FBMSK == 0 && IsDiscardingDstColor();
+				(m_vertex.buff[1].RGBAQ.U32[0] & ~0xFF000000)) == 0) && !preserve_rt_color;
 
 			const bool req_z = m_cached_ctx.FRAME.FBP != m_cached_ctx.ZBUF.ZBP && !m_cached_ctx.ZBUF.ZMSK;
 			bool no_target_found = false;
@@ -1995,6 +1998,7 @@ void GSRendererHW::Draw()
 
 	GSTextureCache::Target* rt = nullptr;
 	GIFRegTEX0 FRAME_TEX0;
+	bool rt_is_fully_overwritten = true;
 	if (!no_rt)
 	{
 		// FBW is going to be wrong for channel shuffling into a new target, so take it from the source.
@@ -2019,10 +2023,20 @@ void GSRendererHW::Draw()
 			OI_GsMemClear();
 			return;
 		}
+
+		// Toss the dirty area if we're overwriting the whole target.
+		rt_is_fully_overwritten = (!preserve_rt_color && m_r.rintersect(rt->m_valid).eq(rt->m_valid) &&
+								   PrimitiveCoversWithoutGaps());
+		if (rt_is_fully_overwritten && !rt->m_dirty.empty())
+		{
+			GL_INS("Clearing dirty list for RT[%x] because we're overwriting the whole target.", rt->m_TEX0.TBP0);
+			rt->m_dirty.clear();
+		}
 	}
 
 	GSTextureCache::Target* ds = nullptr;
 	GIFRegTEX0 ZBUF_TEX0;
+	bool ds_is_fully_overwritten = true;
 	if (!no_ds)
 	{
 		ZBUF_TEX0.U64 = 0;
@@ -2032,6 +2046,15 @@ void GSRendererHW::Draw()
 
 		ds = g_texture_cache->LookupTarget(ZBUF_TEX0, t_size, target_scale, GSTextureCache::DepthStencil,
 			m_cached_ctx.DepthWrite(), 0, false, false, force_preload);
+
+		// Toss the dirty area if we're overwriting the whole target, and all tests pass.
+		ds_is_fully_overwritten = (all_depth_tests_pass && m_r.rintersect(ds->m_valid).eq(ds->m_valid) &&
+								   PrimitiveCoversWithoutGaps());
+		if (ds_is_fully_overwritten && !ds->m_dirty.empty())
+		{
+			GL_INS("Clearing dirty list for DS[%x] because we're overwriting the whole target.", ds->m_TEX0.TBP0);
+			ds->m_dirty.clear();
+		}
 	}
 
 	if (process_texture)
@@ -2401,8 +2424,18 @@ void GSRendererHW::Draw()
 		return;
 	}
 
-	if (!GSConfig.UserHacks_DisableSafeFeatures && is_possible_mem_clear && IsDiscardingDstColor())
-		OI_DoubleHalfClear(rt, ds);
+	bool skip_draw = false;
+	if (!GSConfig.UserHacks_DisableSafeFeatures)
+	{
+		if (!is_possible_mem_clear || !rt_is_fully_overwritten || !ds_is_fully_overwritten || !(skip_draw = OI_TargetClear(rt, ds)))
+		{
+			// If we weren't a clear, but are overwriting, discard the target, since we're drawing over it anyway.
+			if (rt && rt_is_fully_overwritten)
+				g_gs_device->InvalidateRenderTarget(rt->m_texture);
+			if (ds && ds_is_fully_overwritten)
+				g_gs_device->InvalidateRenderTarget(ds->m_texture);
+		}
+	}
 
 	// A couple of hack to avoid upscaling issue. So far it seems to impacts mostly sprite
 	// Note: first hack corrects both position and texture coordinate
@@ -2455,7 +2488,8 @@ void GSRendererHW::Draw()
 
 	//
 
-	DrawPrims(rt, ds, src, tmm);
+	if (!skip_draw)
+		DrawPrims(rt, ds, src, tmm);
 
 	//
 
@@ -5178,9 +5212,9 @@ void GSRendererHW::OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCach
 					rt->UpdateValidity(rt->GetUnscaledRect());
 				}
 			}
-
 		}
 	}
+
 	// Striped double clear done by Powerdrome and Snoopy Vs Red Baron, it will clear in 32 pixel stripes half done by the Z and half done by the FRAME
 	else if (rt && !ds && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && (m_cached_ctx.FRAME.PSM & 0x30) != (m_cached_ctx.ZBUF.PSM & 0x30)
 			&& (m_cached_ctx.FRAME.PSM & 0xF) == (m_cached_ctx.ZBUF.PSM & 0xF) && m_vt.m_eq.z == 1)
@@ -5232,6 +5266,25 @@ void GSRendererHW::OI_DoubleHalfClear(GSTextureCache::Target*& rt, GSTextureCach
 			rt->UpdateValidity(rt->GetUnscaledRect());
 		}
 	}
+}
+
+bool GSRendererHW::OI_TargetClear(GSTextureCache::Target*& rt, GSTextureCache::Target*& ds)
+{
+	if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z)
+		return false;
+
+	const u32 c = m_vertex.buff[1].RGBAQ.U32[0];
+	const u32 max_z = 0xFFFFFFFF >> (GSLocalMemory::m_psm[m_cached_ctx.ZBUF.PSM].fmt * 8);
+	const u32 z = std::min(max_z, m_vertex.buff[1].XYZ.Z);
+	const float d = static_cast<float>(z) * (g_gs_device->Features().clip_control ? 0x1p-32f : 0x1p-24f);
+	GL_INS("OI_TargetClear(): %08X%s %f%s", c, rt ? "" : "[masked]", d, ds ? "" : "[masked]");
+
+	if (rt)
+		g_gs_device->ClearRenderTarget(rt->m_texture, c);
+	if (ds)
+		g_gs_device->ClearDepth(ds->m_texture, d);
+
+	return true;
 }
 
 // Note: hack is safe, but it could impact the perf a little (normally games do only a couple of clear by frame)
