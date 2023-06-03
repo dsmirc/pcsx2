@@ -808,6 +808,8 @@ void GSDeviceVK::InvalidateRenderTarget(GSTexture* t)
 
 void GSDeviceVK::ClearDepth(GSTexture* t, float d)
 {
+	// TODO: Don't end pass immediately, wait until it's next used. If it's immediately used,
+	// and we're in a render pass with it, do an attachment clear instead.
 	if (m_current_depth_target == t)
 		EndRenderPass();
 
