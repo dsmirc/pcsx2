@@ -698,7 +698,9 @@ void VMManager::UpdateRunningGame(UpdateGameReason reason)
 
 	{
 		std::unique_lock lock(s_info_mutex);
-		SaveSessionTime();
+		if (!GSDumpReplayer::IsReplayingDump())
+			SaveSessionTime();
+
 		s_game_serial = std::move(new_serial);
 		s_game_crc = new_crc;
 		s_game_name.clear();
