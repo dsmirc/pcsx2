@@ -1825,7 +1825,8 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 		return;
 
 	// Handle the case where the transfer wrapped around the end of GS memory.
-	const u32 end_bp = off.bnNoWrap(rect.z - 1, rect.w - 1);
+	const u32 start_bp = GSLocalMemory::GetStartBlockAddress(off.bp(), off.bw(), off.psm(), rect);
+	const u32 end_bp = GSLocalMemory::GetEndBlockAddress(off.bp(), off.bw(), off.psm(), rect);
 
 	// Ideally in the future we can turn this on unconditionally, but for now it breaks too much.
 	const bool check_inside_target = (GSConfig.UserHacks_TargetPartialInvalidation ||
@@ -2064,6 +2065,26 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 			// TODO Use ComputeSurfaceOffset below.
 			if (GSUtil::HasSharedBits(psm, t->m_TEX0.PSM))
 			{
+				if (t->m_TEX0.TBP0 >= start_bp && t->m_end_block <= end_bp)
+				{
+					// If we're clearing C24 but the target is C32, then we need to dirty instead.
+					if (rgba._u32 != GSUtil::GetChannelMask(t->m_TEX0.PSM))
+					{
+						GL_CACHE("TC: Dirty whole target(%s) (0x%x) due to being contained within the invalidate range",
+							to_string(type), t->m_TEX0.TBP0);
+						AddDirtyRectTarget(t, t->GetUnscaledRect(), t->m_TEX0.PSM, t->m_TEX0.TBW, rgba);
+						continue;
+					}
+					else
+					{
+						i = list.erase(j);
+						GL_CACHE("TC: Remove Target(%s) (0x%x) due to being contained within the invalidate range",
+							to_string(type), t->m_TEX0.TBP0);
+						delete t;
+						continue;
+					}
+				}
+
 				if (bp < t->m_TEX0.TBP0)
 				{
 					const u32 rowsize = bw * 8192;
