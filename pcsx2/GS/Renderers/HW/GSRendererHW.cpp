@@ -1668,9 +1668,21 @@ void GSRendererHW::Draw()
 		return;
 	}
 
-	// The rectangle of the draw rounded up.
-	const GSVector4 rect = m_vt.m_min.p.upld(m_vt.m_max.p + GSVector4::cxpr(0.5f));
-	m_r = GSVector4i(rect).rintersect(context->scissor.in);
+	// GS doesn't fill the right or bottom edges of sprites/triangles. In other words, once the integer coordinate
+	// has been passed (but is not equal to the integer coordinate), the row/column gets filled. Our rectangle
+	// coordinates are exclusive, so taking the ceiling would be fine, except for the case of when min == max,
+	// so we add 1 if they're equal, otherwise take the ceiling. Test cases for the math:
+	//                                -------------------------
+	//                                | Position range | Size |
+	//                                |            0,0 |    1 |
+	//                                |            0,1 |    1 |
+	//                                |         0,1.25 |    2 |
+	//                                |         0,1.75 |    2 |
+	//                                |            0,2 |    2 |
+	//                                -------------------------
+	m_r = GSVector4i(m_vt.m_min.p.upld(
+						 (m_vt.m_max.p.ceil().blend32(m_vt.m_max.p + GSVector4::cxpr(1.0f), (m_vt.m_min.p == m_vt.m_max.p)))))
+			  .rintersect(context->scissor.in);
 
 	const bool process_texture = PRIM->TME && !(PRIM->ABE && m_context->ALPHA.IsBlack() && !m_cached_ctx.TEX0.TCC);
 	const u32 frame_end_bp = GSLocalMemory::GetEndBlockAddress(m_cached_ctx.FRAME.Block(), m_cached_ctx.FRAME.FBW, m_cached_ctx.FRAME.PSM, m_r);

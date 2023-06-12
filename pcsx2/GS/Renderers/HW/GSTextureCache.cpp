@@ -1711,9 +1711,10 @@ void GSTextureCache::InvalidateVideoMemType(int type, u32 bp)
 // Called each time you want to write to the GS memory
 void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& rect, bool eewrite, bool target)
 {
-	u32 bp = off.bp();
-	u32 bw = off.bw();
-	u32 psm = off.psm();
+	const u32 bp = off.bp();
+	const u32 bw = off.bw();
+	const u32 psm = off.psm();
+	pxAssert(rect.x >= 0 && rect.y >= 0 && rect.width() > 0 && rect.height() > 0);
 
 	if (!target)
 	{
