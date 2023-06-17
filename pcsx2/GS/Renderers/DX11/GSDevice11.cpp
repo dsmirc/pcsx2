@@ -1057,17 +1057,8 @@ void GSDevice11::DrawIndexedPrimitive(int offset, int count)
 	m_ctx->DrawIndexed(count, m_index.start + offset, m_vertex.start);
 }
 
-void GSDevice11::ClearRenderTarget(GSTexture* t, const GSVector4& c)
-{
-	if (!t)
-		return;
-	m_ctx->ClearRenderTargetView(*(GSTexture11*)t, c.v);
-}
-
 void GSDevice11::ClearRenderTarget(GSTexture* t, u32 c)
 {
-	if (!t)
-		return;
 	const GSVector4 color = GSVector4::rgba32(c) * (1.0f / 255);
 
 	m_ctx->ClearRenderTargetView(*(GSTexture11*)t, color.v);
@@ -1489,7 +1480,7 @@ void GSDevice11::DoMultiStretchRects(const MultiStretchRect* rects, u32 num_rect
 }
 
 
-void GSDevice11::DoMerge(GSTexture* sTex[3], GSVector4* sRect, GSTexture* dTex, GSVector4* dRect, const GSRegPMODE& PMODE, const GSRegEXTBUF& EXTBUF, const GSVector4& c, const bool linear)
+void GSDevice11::DoMerge(GSTexture* sTex[3], GSVector4* sRect, GSTexture* dTex, GSVector4* dRect, const GSRegPMODE& PMODE, const GSRegEXTBUF& EXTBUF, u32 c, const bool linear)
 {
 	const GSVector4 full_r(0.0f, 0.0f, 1.0f, 1.0f);
 	const bool feedback_write_2 = PMODE.EN2 && sTex[2] != nullptr && EXTBUF.FBIN == 1;
@@ -1504,7 +1495,7 @@ void GSDevice11::DoMerge(GSTexture* sTex[3], GSVector4* sRect, GSTexture* dTex, 
 	// Upload constant to select YUV algo, but skip constant buffer update if we don't need it
 	if (feedback_write_2 || feedback_write_1 || sTex[0])
 	{
-		const MergeConstantBuffer cb = {c, EXTBUF.EMODA, EXTBUF.EMODC};
+		const MergeConstantBuffer cb = {GSVector4::unorm8(c), EXTBUF.EMODA, EXTBUF.EMODC};
 		m_ctx->UpdateSubresource(m_merge.cb.get(), 0, nullptr, &cb, 0, 0);
 	}
 
