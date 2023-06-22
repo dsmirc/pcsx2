@@ -926,10 +926,11 @@ REG64_(GIFReg, UV)
 REG_END
 
 // GSState::GIFRegHandlerXYOFFSET will make sure that the _PAD1/2 bits are set to zero
+// NOTE: Register is actually unsigned, we make it signed so we can offset it for HW.
 
 REG64_(GIFReg, XYOFFSET)
-	u32 OFX; // : 16; u32 _PAD1 : 16;
-	u32 OFY; // : 16; u32 _PAD2 : 16;
+	s32 OFX; // : 16; u32 _PAD1 : 16;
+	s32 OFY; // : 16; u32 _PAD2 : 16;
 REG_END
 
 REG64_(GIFReg, XYZ)

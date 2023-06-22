@@ -350,7 +350,7 @@ void GSRendererHW::ConvertSpriteTextureShuffle(bool& write_ba, bool& read_ba)
 {
 	const u32 count = m_vertex.next;
 	GSVertex* v = &m_vertex.buff[0];
-	const GIFRegXYOFFSET& o = m_context->XYOFFSET;
+	const GIFRegXYOFFSET& o = m_cached_ctx.XYOFFSET;
 
 	// vertex position is 8 to 16 pixels, therefore it is the 16-31 bits of the colors
 	const int pos = (v[0].XYZ.X - o.OFX) & 0xFF;
@@ -389,11 +389,11 @@ void GSRendererHW::ConvertSpriteTextureShuffle(bool& write_ba, bool& read_ba)
 			static_cast<int>(m_vt.m_min.p.w), r.x, r.y, r.z, r.w);
 
 		const GSVector4i fpr = r.sll32(4);
-		v[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.x);
-		v[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.y);
+		v[0].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + fpr.x);
+		v[0].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + fpr.y);
 
-		v[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.z);
-		v[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.w);
+		v[1].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + fpr.z);
+		v[1].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + fpr.w);
 
 		if (PRIM->FST)
 		{
@@ -680,10 +680,10 @@ void GSRendererHW::MergeSprite(GSTextureCache::Source* tex)
 				// Replace all sprite with a single fullscreen sprite.
 				GSVertex* s = &m_vertex.buff[0];
 
-				s[0].XYZ.X = static_cast<u16>((16.0f * m_vt.m_min.p.x) + m_context->XYOFFSET.OFX);
-				s[1].XYZ.X = static_cast<u16>((16.0f * m_vt.m_max.p.x) + m_context->XYOFFSET.OFX);
-				s[0].XYZ.Y = static_cast<u16>((16.0f * m_vt.m_min.p.y) + m_context->XYOFFSET.OFY);
-				s[1].XYZ.Y = static_cast<u16>((16.0f * m_vt.m_max.p.y) + m_context->XYOFFSET.OFY);
+				s[0].XYZ.X = static_cast<u16>((16.0f * m_vt.m_min.p.x) + m_cached_ctx.XYOFFSET.OFX);
+				s[1].XYZ.X = static_cast<u16>((16.0f * m_vt.m_max.p.x) + m_cached_ctx.XYOFFSET.OFX);
+				s[0].XYZ.Y = static_cast<u16>((16.0f * m_vt.m_min.p.y) + m_cached_ctx.XYOFFSET.OFY);
+				s[1].XYZ.Y = static_cast<u16>((16.0f * m_vt.m_max.p.y) + m_cached_ctx.XYOFFSET.OFY);
 
 				s[0].U = static_cast<u16>(16.0f * m_vt.m_min.t.x);
 				s[0].V = static_cast<u16>(16.0f * m_vt.m_min.t.y);
@@ -1387,7 +1387,7 @@ void GSRendererHW::RoundSpriteOffset()
 		// Performance note: if it had any impact on perf, someone would port it to SSE (AKA GSVector)
 
 		// Compute the coordinate of first and last texels (in native with a linear filtering)
-		const int ox = m_context->XYOFFSET.OFX;
+		const int ox = m_cached_ctx.XYOFFSET.OFX;
 		const int X0 = v[i].XYZ.X - ox;
 		const int X1 = v[i + 1].XYZ.X - ox;
 		const int Lx = (v[i + 1].XYZ.X - v[i].XYZ.X);
@@ -1404,7 +1404,7 @@ void GSRendererHW::RoundSpriteOffset()
 		}
 #endif
 
-		const int oy = m_context->XYOFFSET.OFY;
+		const int oy = m_cached_ctx.XYOFFSET.OFY;
 		const int Y0 = v[i].XYZ.Y - oy;
 		const int Y1 = v[i + 1].XYZ.Y - oy;
 		const int Ly = (v[i + 1].XYZ.Y - v[i].XYZ.Y);
@@ -1524,6 +1524,7 @@ void GSRendererHW::Draw()
 	m_cached_ctx.TEST = context->TEST;
 	m_cached_ctx.FRAME = context->FRAME;
 	m_cached_ctx.ZBUF = context->ZBUF;
+	m_cached_ctx.XYOFFSET = context->XYOFFSET;
 	m_primitive_covers_without_gaps.reset();
 
 	if (IsBadFrame())
@@ -1811,10 +1812,10 @@ void GSRendererHW::Draw()
 				m_context->scissor.in.z = m_cached_ctx.FRAME.FBW * 64;
 
 				GSVertex* s = &m_vertex.buff[0];
-				s[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + 0);
-				s[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + 16384);
-				s[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + 0);
-				s[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + 16384);
+				s[0].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + 0);
+				s[1].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + 16384);
+				s[0].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + 0);
+				s[1].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + 16384);
 
 				m_vertex.head = m_vertex.tail = m_vertex.next = 2;
 				m_index.tail = 2;
@@ -2030,18 +2031,12 @@ void GSRendererHW::Draw()
 			fm, false, force_preload, preload_uploads);
 
 		// Draw skipped because it was a clear and there was no target.
-		if (!rt)
+		if (!rt && is_clear)
 		{
-			if (is_clear)
-			{
-				GL_INS("Clear draw with no target, skipping.");
-				cleanup_cancelled_draw();
-				OI_GsMemClear();
-				return;
-			}
-
-			rt = g_texture_cache->CreateTarget(FRAME_TEX0, t_size, target_scale, GSTextureCache::RenderTarget, true,
-				fm, false, force_preload, preload_uploads);
+			GL_INS("Clear draw with no target, skipping.");
+			cleanup_cancelled_draw();
+			OI_GsMemClear();
+			return;
 		}
 	}
 
@@ -2056,11 +2051,57 @@ void GSRendererHW::Draw()
 
 		ds = g_texture_cache->LookupTarget(ZBUF_TEX0, t_size, target_scale, GSTextureCache::DepthStencil,
 			m_cached_ctx.DepthWrite(), 0, false, false, force_preload);
-		if (!ds)
+	}
+
+	if (((!no_rt && !rt) || no_rt) && ((!no_ds && !ds) || no_ds))
+	{
+		s32 page_offset;
+		if (GSLocalMemory::IsPageAligned(no_rt ? m_cached_ctx.ZBUF.PSM : m_cached_ctx.FRAME.PSM, m_r) &&
+			(page_offset = g_texture_cache->FindOffsetTarget(FRAME_TEX0, no_rt, ZBUF_TEX0, no_ds, m_r)) >= 0)
 		{
-			ds = g_texture_cache->CreateTarget(ZBUF_TEX0, t_size, target_scale, GSTextureCache::DepthStencil,
-				m_cached_ctx.DepthWrite(), 0, false, false, force_preload);
+			// Fudge the context
+			Console.WriteLn("TARGET_OFFSET with an offset of %d", page_offset);
+
+			// Lookup new targets
+			if (!no_rt)
+			{
+				rt = g_texture_cache->LookupTarget(FRAME_TEX0, t_size, target_scale, GSTextureCache::RenderTarget, true,
+					fm, false, force_preload, preload_uploads);
+				pxAssert(rt);
+			}
+			if (!no_ds)
+			{
+				ds = g_texture_cache->LookupTarget(ZBUF_TEX0, t_size, target_scale, GSTextureCache::DepthStencil,
+					m_cached_ctx.DepthWrite(), 0, false, false, force_preload);
+				pxAssert(ds);
+			}
+#if 1
+			const GIFRegTEX0 tgt_attrs = no_rt ? ZBUF_TEX0 : FRAME_TEX0;
+			const GSVector2i& pgs = GSLocalMemory::m_psm[tgt_attrs.PSM].pgs;
+			const u32 fbw = tgt_attrs.TBW;
+			const GSVector2i xy_offset = GSVector2i(
+				static_cast<s32>((static_cast<u32>(page_offset) % fbw) * 64u),
+				static_cast<s32>((static_cast<u32>(page_offset) / fbw) * static_cast<u32>(pgs.y)));
+			GL_INS("Applying offset of %dx%d for page offset of %u", xy_offset.x, xy_offset.y, page_offset);
+
+			const GSVector4i xy_offset_v = GSVector4i(xy_offset).xyxy();
+			m_r += xy_offset_v;
+			m_context->scissor.in += xy_offset_v;
+			m_cached_ctx.XYOFFSET.OFX -= xy_offset.x * 16;
+			m_cached_ctx.XYOFFSET.OFY -= xy_offset.y * 16;
+#endif
 		}
+	}
+
+	if (!no_rt && !rt)
+	{
+		rt = g_texture_cache->CreateTarget(FRAME_TEX0, t_size, target_scale, GSTextureCache::RenderTarget, true,
+			fm, false, force_preload, preload_uploads);
+	}
+	if (!no_ds && !ds)
+	{
+		ds = g_texture_cache->CreateTarget(ZBUF_TEX0, t_size, target_scale, GSTextureCache::DepthStencil,
+			m_cached_ctx.DepthWrite(), 0, false, false, force_preload);
 	}
 
 	if (process_texture)
@@ -2446,7 +2487,7 @@ void GSRendererHW::Draw()
 		{
 			// Note for performance reason I do the check only once on the first
 			// primitive
-			const int win_position = v[1].XYZ.X - context->XYOFFSET.OFX;
+			const int win_position = v[1].XYZ.X - m_cached_ctx.XYOFFSET.OFX;
 			const bool unaligned_position = ((win_position & 0xF) == 8);
 			const bool unaligned_texture = ((v[1].U & 0xF) == 0) && PRIM->FST; // I'm not sure this check is useful
 			const bool hole_in_vertex = (count < 4) || (v[1].XYZ.X != v[2].XYZ.X);
@@ -3143,10 +3184,10 @@ __ri bool GSRendererHW::EmulateChannelShuffle(GSTextureCache::Target* src, bool 
 	// the rendered size of the framebuffer
 
 	GSVertex* s = &m_vertex.buff[0];
-	s[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + 0);
-	s[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + 16384);
-	s[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + 0);
-	s[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + 16384);
+	s[0].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + 0);
+	s[1].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + 16384);
+	s[0].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + 0);
+	s[1].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + 16384);
 
 	m_vertex.head = m_vertex.tail = m_vertex.next = 2;
 	m_index.tail = 2;
@@ -4577,8 +4618,8 @@ __ri void GSRendererHW::DrawPrims(GSTextureCache::Target* rt, GSTextureCache::Ta
 	const float rtscale = (ds ? ds->GetScale() : rt->GetScale());
 	const float sx = 2.0f * rtscale / (rtsize.x << 4);
 	const float sy = 2.0f * rtscale / (rtsize.y << 4);
-	const float ox = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFX));
-	const float oy = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFY));
+	const float ox = static_cast<float>(static_cast<int>(m_cached_ctx.XYOFFSET.OFX));
+	const float oy = static_cast<float>(static_cast<int>(m_cached_ctx.XYOFFSET.OFY));
 	float ox2 = -1.0f / rtsize.x;
 	float oy2 = -1.0f / rtsize.y;
 	float mod_xy = 0.0f;
@@ -5583,11 +5624,11 @@ void GSRendererHW::ReplaceVerticesWithSprite(const GSVector4i& unscaled_rect, co
 	const GSVector4i fpuv = unscaled_uv_rect.sll32(4);
 	GSVertex* v = m_vertex.buff;
 
-	v[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.x);
-	v[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.y);
+	v[0].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + fpr.x);
+	v[0].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + fpr.y);
 
-	v[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.z);
-	v[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.w);
+	v[1].XYZ.X = static_cast<u16>(m_cached_ctx.XYOFFSET.OFX + fpr.z);
+	v[1].XYZ.Y = static_cast<u16>(m_cached_ctx.XYOFFSET.OFY + fpr.w);
 
 	if (PRIM->FST)
 	{

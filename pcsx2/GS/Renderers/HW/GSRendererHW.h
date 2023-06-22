@@ -114,6 +114,7 @@ private:
 		GIFRegTEST TEST;
 		GIFRegFRAME FRAME;
 		GIFRegZBUF ZBUF;
+		GIFRegXYOFFSET XYOFFSET;
 
 		__ri bool DepthRead() const { return TEST.ZTE && TEST.ZTST >= 2; }
 

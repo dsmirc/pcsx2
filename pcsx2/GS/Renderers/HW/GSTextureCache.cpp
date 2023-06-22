@@ -1437,6 +1437,19 @@ GSTextureCache::Target* GSTextureCache::LookupTarget(GIFRegTEX0 TEX0, const GSVe
 
 		assert(dst && dst->m_texture && dst->m_scale == scale);
 	}
+	else
+	{
+		if (type == DepthStencil)
+		{
+			GL_CACHE("TC: Lookup Target(Depth) %dx%d, miss (0x%x, TBW %d, %s)", size.x, size.y, bp,
+				TEX0.TBW, psm_str(TEX0.PSM));
+		}
+		else
+		{
+			GL_CACHE("TC: Lookup %s(Color) %dx%d FBMSK %08x, miss (0x%x, TBW %d, %s)", is_frame ? "Frame" : "Target",
+				size.x, size.y, fbmask, bp, TEX0.TBW, psm_str(TEX0.PSM));
+		}
+	}
 
 	return dst;
 }
@@ -1449,12 +1462,12 @@ GSTextureCache::Target* GSTextureCache::CreateTarget(GIFRegTEX0 TEX0, const GSVe
 
 	if (type == DepthStencil)
 	{
-		GL_CACHE("TC: Lookup Target(Depth) %dx%d, miss (0x%x, TBW %d, %s)", size.x, size.y, bp,
+		GL_CACHE("TC: Create Target(Depth) %dx%d, miss (0x%x, TBW %d, %s)", size.x, size.y, bp,
 			TEX0.TBW, psm_str(TEX0.PSM));
 	}
 	else
 	{
-		GL_CACHE("TC: Lookup %s(Color) %dx%d FBMSK %08x, miss (0x%x, TBW %d, %s)", is_frame ? "Frame" : "Target",
+		GL_CACHE("TC: Create %s(Color) %dx%d FBMSK %08x, miss (0x%x, TBW %d, %s)", is_frame ? "Frame" : "Target",
 			size.x, size.y, fbmask, bp, TEX0.TBW, psm_str(TEX0.PSM));
 	}
 
@@ -1580,6 +1593,84 @@ GSTextureCache::Target* GSTextureCache::CreateTarget(GIFRegTEX0 TEX0, const GSVe
 
 	assert(dst && dst->m_texture && dst->m_scale == scale);
 	return dst;
+}
+
+s32 GSTextureCache::FindOffsetTarget(GIFRegTEX0& FRAME_TEX0, bool no_rt, GIFRegTEX0& ZBUF_TEX0, bool no_ds, const GSVector4i& draw_rc)
+{
+	const u32 bw = no_rt ? ZBUF_TEX0.TBW : FRAME_TEX0.TBW;
+	const u32 zpsm = ZBUF_TEX0.PSM;
+
+	Target* frame_candidate = nullptr;
+	u32 frame_offset = 0;
+	if (!no_rt)
+	{
+		const u32 fbp = FRAME_TEX0.TBP0;
+		const u32 fpsm = FRAME_TEX0.PSM;
+		const u32 end_bp = GSLocalMemory::GetEndBlockAddress(fbp, bw, fpsm, draw_rc);
+
+		for (auto i = m_dst[RenderTarget].begin(); i != m_dst[RenderTarget].end(); ++i)
+		{
+			Target* t = *i;
+			pxAssert(t->m_TEX0.TBP0 != fbp);
+
+			// TODO: >= for bw?
+			if (fbp > t->m_TEX0.TBP0 && end_bp <= t->m_end_block && (t->m_TEX0.TBW == bw || bw == 1) && t->m_TEX0.PSM == fpsm)
+			{
+				GL_INS("FindOffsetTarget(): Possible FRAME candidate at %x -> %x offset %u pages", t->m_TEX0.TBP0, t->m_end_block, (fbp - t->m_TEX0.TBP0) >> 5);
+				m_dst[RenderTarget].MoveFront(i.Index());
+				frame_candidate = t;
+				frame_offset = FRAME_TEX0.TBP0 - t->m_TEX0.TBP0;
+				break;
+			}
+		}
+
+		if (!frame_candidate)
+			return -1;
+	}
+
+	Target* zbuf_candidate = nullptr;
+	u32 zbuf_offset = 0;
+	if (!no_ds)
+	{
+		const u32 zbp = ZBUF_TEX0.TBP0;
+		const u32 zpsm = ZBUF_TEX0.PSM;
+		const u32 end_bp = GSLocalMemory::GetEndBlockAddress(zbp, bw, zpsm, draw_rc);
+
+		for (auto i = m_dst[DepthStencil].begin(); i != m_dst[DepthStencil].end(); ++i)
+		{
+			Target* t = *i;
+			pxAssert(t->m_TEX0.TBP0 != zbp);
+
+			// TODO: >= for bw?
+			if (zbp > t->m_TEX0.TBP0 && end_bp <= t->m_end_block && (t->m_TEX0.TBW == bw || bw == 1) && t->m_TEX0.PSM == zpsm)
+			{
+				GL_INS("FindOffsetTarget(): Possible Z candidate at %x -> %x offset %u pages", t->m_TEX0.TBP0, t->m_end_block, (zbp - t->m_TEX0.TBP0) >> 5);
+				m_dst[DepthStencil].MoveFront(i.Index());
+				zbuf_candidate = t;
+				zbuf_offset = ZBUF_TEX0.TBP0 - t->m_TEX0.TBP0;
+				break;
+			}
+		}
+
+		if (!zbuf_candidate)
+			return -1;
+	}
+
+	// Offsets have to match
+	if (frame_candidate && zbuf_candidate && frame_offset != zbuf_offset)
+	{
+		GL_INS("FindOffsetTarget(): Offset mismatch, can't use");
+		return -1;
+	}
+
+#if 1
+	if (frame_candidate)
+		FRAME_TEX0 = frame_candidate->m_TEX0;
+	if (zbuf_candidate)
+		ZBUF_TEX0 = zbuf_candidate->m_TEX0;
+#endif
+
+	return static_cast<s32>((frame_candidate ? frame_offset : zbuf_offset) >> 5);
 }
 
 GSTextureCache::Target* GSTextureCache::LookupDisplayTarget(GIFRegTEX0 TEX0, const GSVector2i& size, float scale)
