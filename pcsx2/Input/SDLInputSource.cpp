@@ -543,8 +543,6 @@ int SDLInputSource::GetFreePlayerId() const
 		if (i == m_controllers.size())
 			return player_id;
 	}
-
-	return 0;
 }
 
 bool SDLInputSource::OpenDevice(int index, bool is_gamecontroller)

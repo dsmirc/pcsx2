@@ -39,7 +39,6 @@ public:
 		struct { float x, y, z, w; };
 		struct { float r, g, b, a; };
 		struct { float left, top, right, bottom; };
-		float v[4];
 		float F32[4];
 		double F64[2];
 		s8  I8[16];
@@ -207,9 +206,9 @@ public:
 #endif
 	}
 
-	__forceinline void operator=(__m128 m)
+	__forceinline void operator=(__m128 m_)
 	{
-		this->m = m;
+		m = m_;
 	}
 
 	__forceinline operator __m128() const
@@ -302,12 +301,12 @@ public:
 		// The idea behind this algorithm is to split the float into two parts, log2(m * 2^e) => log2(m) + log2(2^e) => log2(m) + e,
 		// and then approximate the logarithm of the mantissa (it's 1.x when normalized, a nice short range).
 
-		GSVector4 one = m_one;
+		const GSVector4 one = m_one;
 
-		GSVector4i i = GSVector4i::cast(*this);
+		const GSVector4i i = GSVector4i::cast(*this);
 
-		GSVector4 e = GSVector4(((i << 1) >> 24) - GSVector4i::x0000007f());
-		GSVector4 m = GSVector4::cast((i << 9) >> 9) | one;
+		const GSVector4 expo = GSVector4(((i << 1) >> 24) - GSVector4i::x0000007f());
+		const GSVector4 mant = GSVector4::cast((i << 9) >> 9) | one;
 
 		GSVector4 p;
 
@@ -316,28 +315,28 @@ public:
 		switch (precision)
 		{
 			case 3:
-				p = LOG_POLY2(m, 2.28330284476918490682f, -1.04913055217340124191f, 0.204446009836232697516f);
+				p = LOG_POLY2(mant, 2.28330284476918490682f, -1.04913055217340124191f, 0.204446009836232697516f);
 				break;
 			case 4:
-				p = LOG_POLY3(m, 2.61761038894603480148f, -1.75647175389045657003f, 0.688243882994381274313f, -0.107254423828329604454f);
+				p = LOG_POLY3(mant, 2.61761038894603480148f, -1.75647175389045657003f, 0.688243882994381274313f, -0.107254423828329604454f);
 				break;
 			default:
 			case 5:
-				p = LOG_POLY4(m, 2.8882704548164776201f, -2.52074962577807006663f, 1.48116647521213171641f, -0.465725644288844778798f, 0.0596515482674574969533f);
+				p = LOG_POLY4(mant, 2.8882704548164776201f, -2.52074962577807006663f, 1.48116647521213171641f, -0.465725644288844778798f, 0.0596515482674574969533f);
 				break;
 			case 6:
-				p = LOG_POLY5(m, 3.1157899f, -3.3241990f, 2.5988452f, -1.2315303f, 3.1821337e-1f, -3.4436006e-2f);
+				p = LOG_POLY5(mant, 3.1157899f, -3.3241990f, 2.5988452f, -1.2315303f, 3.1821337e-1f, -3.4436006e-2f);
 				break;
 		}
 
 		// This effectively increases the polynomial degree by one, but ensures that log2(1) == 0
 
-		p = p * (m - one);
+		p = p * (mant - one);
 
-		return p + e;
+		return p + expo;
 	}
 
-	__forceinline GSVector4 madd(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 madd(const GSVector4& mult, const GSVector4& add) const
 	{
 #if 0 //_M_SSE >= 0x501
 
@@ -345,12 +344,12 @@ public:
 
 #else
 
-		return *this * a + b;
+		return *this * mult + add;
 
 #endif
 	}
 
-	__forceinline GSVector4 msub(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 msub(const GSVector4& mult, const GSVector4& sub) const
 	{
 #if 0 //_M_SSE >= 0x501
 
@@ -358,12 +357,12 @@ public:
 
 #else
 
-		return *this * a - b;
+		return *this * mult - sub;
 
 #endif
 	}
 
-	__forceinline GSVector4 nmadd(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 nmadd(const GSVector4& a_, const GSVector4& b_) const
 	{
 #if 0 //_M_SSE >= 0x501
 
@@ -371,32 +370,32 @@ public:
 
 #else
 
-		return b - *this * a;
+		return b_ - *this * a_;
 
 #endif
 	}
 
-	__forceinline GSVector4 nmsub(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 nmsub(const GSVector4& a_, const GSVector4& b_) const
 	{
 #if 0 //_M_SSE >= 0x501
 
-		return GSVector4(_mm_fnmsub_ps(m, a, b));
+		return GSVector4(_mm_fnmsub_ps(m, a_, b_));
 
 #else
 
-		return -b - *this * a;
+		return -b_ - *this * a_;
 
 #endif
 	}
 
-	__forceinline GSVector4 addm(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 addm(const GSVector4& a_, const GSVector4& b_) const
 	{
-		return a.madd(b, *this); // *this + a * b
+		return a_.madd(b_, *this); // *this + a * b
 	}
 
-	__forceinline GSVector4 subm(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 subm(const GSVector4& a_, const GSVector4& b_) const
 	{
-		return a.nmadd(b, *this); // *this - a * b
+		return a_.nmadd(b_, *this); // *this - a * b
 	}
 
 	__forceinline GSVector4 hadd() const
@@ -425,14 +424,14 @@ public:
 		return GSVector4(_mm_dp_ps(m, v.m, i));
 	}
 
-	__forceinline GSVector4 sat(const GSVector4& a, const GSVector4& b) const
+	__forceinline GSVector4 sat(const GSVector4& min, const GSVector4& max) const
 	{
-		return GSVector4(_mm_min_ps(_mm_max_ps(m, a), b));
+		return GSVector4(_mm_min_ps(_mm_max_ps(m, min), max));
 	}
 
-	__forceinline GSVector4 sat(const GSVector4& a) const
+	__forceinline GSVector4 sat(const GSVector4& minmax) const
 	{
-		return GSVector4(_mm_min_ps(_mm_max_ps(m, a.xyxy()), a.zwzw()));
+		return GSVector4(_mm_min_ps(_mm_max_ps(m, minmax.xyxy()), minmax.zwzw()));
 	}
 
 	__forceinline GSVector4 sat(const float scale = 255) const
@@ -445,55 +444,55 @@ public:
 		return min(GSVector4(scale));
 	}
 
-	__forceinline GSVector4 min(const GSVector4& a) const
+	__forceinline GSVector4 min(const GSVector4& v) const
 	{
-		return GSVector4(_mm_min_ps(m, a));
+		return GSVector4(_mm_min_ps(m, v));
 	}
 
-	__forceinline GSVector4 max(const GSVector4& a) const
+	__forceinline GSVector4 max(const GSVector4& v) const
 	{
-		return GSVector4(_mm_max_ps(m, a));
+		return GSVector4(_mm_max_ps(m, v));
 	}
 
 	template <int mask>
-	__forceinline GSVector4 blend32(const GSVector4& a) const
+	__forceinline GSVector4 blend32(const GSVector4& v) const
 	{
-		return GSVector4(_mm_blend_ps(m, a, mask));
+		return GSVector4(_mm_blend_ps(m, v, mask));
 	}
 
-	__forceinline GSVector4 blend32(const GSVector4& a, const GSVector4& mask) const
+	__forceinline GSVector4 blend32(const GSVector4& v, const GSVector4& mask) const
 	{
-		return GSVector4(_mm_blendv_ps(m, a, mask));
+		return GSVector4(_mm_blendv_ps(m, v, mask));
 	}
 
-	__forceinline GSVector4 upl(const GSVector4& a) const
+	__forceinline GSVector4 upl(const GSVector4& v) const
 	{
-		return GSVector4(_mm_unpacklo_ps(m, a));
+		return GSVector4(_mm_unpacklo_ps(m, v));
 	}
 
-	__forceinline GSVector4 uph(const GSVector4& a) const
+	__forceinline GSVector4 uph(const GSVector4& v) const
 	{
-		return GSVector4(_mm_unpackhi_ps(m, a));
+		return GSVector4(_mm_unpackhi_ps(m, v));
 	}
 
-	__forceinline GSVector4 upld(const GSVector4& a) const
+	__forceinline GSVector4 upld(const GSVector4& v) const
 	{
-		return GSVector4(_mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(m), _mm_castps_pd(a.m))));
+		return GSVector4(_mm_castpd_ps(_mm_unpacklo_pd(_mm_castps_pd(m), _mm_castps_pd(v.m))));
 	}
 
-	__forceinline GSVector4 uphd(const GSVector4& a) const
+	__forceinline GSVector4 uphd(const GSVector4& v) const
 	{
-		return GSVector4(_mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(m), _mm_castps_pd(a.m))));
+		return GSVector4(_mm_castpd_ps(_mm_unpackhi_pd(_mm_castps_pd(m), _mm_castps_pd(v.m))));
 	}
 
-	__forceinline GSVector4 l2h(const GSVector4& a) const
+	__forceinline GSVector4 l2h(const GSVector4& v) const
 	{
-		return GSVector4(_mm_movelh_ps(m, a));
+		return GSVector4(_mm_movelh_ps(m, v));
 	}
 
-	__forceinline GSVector4 h2l(const GSVector4& a) const
+	__forceinline GSVector4 h2l(const GSVector4& v) const
 	{
-		return GSVector4(_mm_movehl_ps(m, a));
+		return GSVector4(_mm_movehl_ps(m, v));
 	}
 
 	__forceinline GSVector4 andnot(const GSVector4& v) const
@@ -703,22 +702,22 @@ GSVector.h:2973:15: error:  shadows template parm 'int i'
 		d = GSVector4((v >> 24));
 	}
 
-	__forceinline static void transpose(GSVector4& a, GSVector4& b, GSVector4& c, GSVector4& d)
+	__forceinline static void transpose(GSVector4& a_, GSVector4& b_, GSVector4& c, GSVector4& d)
 	{
-		GSVector4 v0 = a.xyxy(b);
+		GSVector4 v0 = a_.xyxy(b_);
 		GSVector4 v1 = c.xyxy(d);
 
 		GSVector4 e = v0.xzxz(v1);
 		GSVector4 f = v0.ywyw(v1);
 
-		GSVector4 v2 = a.zwzw(b);
+		GSVector4 v2 = a_.zwzw(b_);
 		GSVector4 v3 = c.zwzw(d);
 
 		GSVector4 g = v2.xzxz(v3);
 		GSVector4 h = v2.ywyw(v3);
 
-		a = e;
-		b = f;
+		a_ = e;
+		b_ = f;
 		c = g;
 		d = h;
 /*

@@ -89,7 +89,7 @@ static void SaveYAMLToFile(const char* filename, const ryml::NodeRef& node)
 }
 
 static constexpr time_t MEMORY_CARD_FILE_ENTRY_DATE_TIME_OFFSET = 60 * 60 * 9; // 9 hours from UTC
-static auto last = std::chrono::time_point<std::chrono::system_clock>();
+static auto s_last_message_time = std::chrono::time_point<std::chrono::system_clock>();
 
 MemoryCardFileEntryDateTime MemoryCardFileEntryDateTime::FromTime(time_t time)
 {
@@ -1661,8 +1661,8 @@ s32 FolderMemoryCard::EraseBlock(u32 adr)
 	memset(eraseData, 0xFF, PageSize);
 	for (int page = 0; page < 16; ++page)
 	{
-		const u32 adr = block * BlockSizeRaw + page * PageSizeRaw;
-		Save(eraseData, adr, PageSize);
+		const u32 page_adr = block * BlockSizeRaw + page * PageSizeRaw;
+		Save(eraseData, page_adr, PageSize);
 	}
 
 	// return 0 on fail, 1 on success?
@@ -2354,7 +2354,7 @@ s32 FolderMemoryCardAggregator::Save(uint slot, const u8* src, u32 adr, int size
 	const s32 saveResult = m_cards[slot].Save(src, adr, size);
 	if (saveResult)
 	{
-		std::chrono::duration<float> elapsed = std::chrono::system_clock::now() - last;
+		std::chrono::duration<float> elapsed = std::chrono::system_clock::now() - s_last_message_time;
 		if (elapsed > std::chrono::seconds(5))
 		{
 			const std::string_view filename = Path::GetFileName(m_cards[slot].GetFolderName());
@@ -2362,7 +2362,7 @@ s32 FolderMemoryCardAggregator::Save(uint slot, const u8* src, u32 adr, int size
 				fmt::format(TRANSLATE_SV("MemoryCard", "Memory Card '{}' was saved to storage."), filename),
 				Host::OSD_INFO_DURATION);
 
-			last = std::chrono::system_clock::now();
+			s_last_message_time = std::chrono::system_clock::now();
 		}
 		
 	}

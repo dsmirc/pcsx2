@@ -380,7 +380,7 @@ static void recDIVsuper(int info, bool sign, bool upper, int process)
 	else
 		_eeMoveGPRtoR(rax, _Rs_);
 
-	u8* end1;
+	u8* end1 = nullptr;
 	if (sign) //test for overflow (x86 will just throw an exception)
 	{
 		xCMP(eax, 0x80000000);

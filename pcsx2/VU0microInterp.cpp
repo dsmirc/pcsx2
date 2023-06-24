@@ -21,6 +21,10 @@
 
 #include <cfenv>
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4701) // warning C4701: potentially uninitialized local variable '_VF' used
+#endif
+
 extern void _vuFlushAll(VURegs* VU);
 
 static void _vu0ExecUpper(VURegs* VU, u32* ptr)

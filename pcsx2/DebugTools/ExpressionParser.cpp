@@ -445,18 +445,20 @@ bool parsePostfixExpression(PostfixExpression& exp, IExpressionFunctions* funcs,
 			switch (opcode)
 			{
 			case EXOP_MEMSIZE:	// must be followed by EXOP_MEM
-				if (exp[num++].second != EXOP_MEM)
 				{
-					sprintf(expressionError,"Invalid memsize operator");
-					return false;
-				}
+					if (exp[num++].second != EXOP_MEM)
+					{
+						sprintf(expressionError,"Invalid memsize operator");
+						return false;
+					}
 
-				u64 val;
-				if(!funcs->getMemoryValue(arg[1],arg[0],val,expressionError))
-				{
-					return false;
+					u64 val;
+					if(!funcs->getMemoryValue(arg[1],arg[0],val,expressionError))
+					{
+						return false;
+					}
+					valueStack.push_back(val);
 				}
-				valueStack.push_back(val);
 				break;
 			case EXOP_MEM:
 				{

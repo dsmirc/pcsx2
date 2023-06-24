@@ -26,7 +26,7 @@ static inline std::unique_ptr<zip_t, void (*)(zip_t*)> zip_open_managed(const ch
 {
 	zip_source_t* zs = zip_source_file_create(filename, 0, 0, ze);
 	zip_t* zip = nullptr;
-	if (zs && !(zip = zip_open_from_source(zs, flags, ze)))
+	if (zs && (zip = zip_open_from_source(zs, flags, ze)) == nullptr)
 	{
 		// have to clean up source
 		zip_source_free(zs);
@@ -49,7 +49,7 @@ static inline std::unique_ptr<zip_t, void (*)(zip_t*)> zip_open_buffer_managed(c
 {
 	zip_source_t* zs = zip_source_buffer_create(buffer, size, freep, ze);
 	zip_t* zip = nullptr;
-	if (zs && !(zip = zip_open_from_source(zs, flags, ze)))
+	if (zs && (zip = zip_open_from_source(zs, flags, ze)) == nullptr)
 	{
 		// have to clean up source
 		zip_source_free(zs);

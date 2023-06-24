@@ -837,7 +837,6 @@ public:
 			else // We're using screen offsets, so just calculate the entire offset.
 			{
 				const GSVector4i offsets = !GSConfig.PCRTCOverscan ? VideoModeOffsets[videomode] : VideoModeOffsetsOverscan[videomode];
-				GSVector2i offset = { 0, 0 };
 				GSVector2i zeroDisplay = NearestToZeroOffset();
 
 				if (both_enabled)
@@ -855,6 +854,7 @@ public:
 				for (int i = 0; i < 2; i++)
 				{
 					// Should this be MAGV/H in the DISPLAY register rather than the "default" magnification?
+					GSVector2i offset;
 					offset.x = (static_cast<int>(PCRTCDisplays[i].displayOffset.x) - offsets.z) / (VideoModeDividers[videomode].x + 1);
 					offset.y = (static_cast<int>(PCRTCDisplays[i].displayOffset.y) - (offsets.w * (interlaced + 1))) / (VideoModeDividers[videomode].y + 1);
 
@@ -867,7 +867,6 @@ public:
 				if (both_enabled)
 				{
 					GSVector2i offset;
-
 					offset.x = (PCRTCDisplays[1 - zeroDisplay.x].displayRect.x - PCRTCDisplays[zeroDisplay.x].displayRect.x);
 					offset.y = (PCRTCDisplays[1 - zeroDisplay.y].displayRect.y - PCRTCDisplays[zeroDisplay.y].displayRect.y);
 

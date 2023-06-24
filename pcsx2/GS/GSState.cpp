@@ -728,7 +728,7 @@ __forceinline void GSState::ApplyPRIM(u32 prim)
 
 	UpdateVertexKick();
 
-	ASSERT(m_index.tail == 0 || !g_gs_device->Features().provoking_vertex_last || m_index.buff[m_index.tail - 1] + 1 == m_vertex.next);
+	ASSERT(m_index.tail == 0 || !g_gs_device->Features().provoking_vertex_last || m_index.buff[m_index.tail - 1] + 1u == m_vertex.next);
 
 	if (m_index.tail == 0)
 		m_vertex.next = 0;
@@ -2401,7 +2401,7 @@ void GSState::Transfer(const u8* mem, u32 size)
 			}
 		}
 
-		if (index == 0)
+		if constexpr (index == 0)
 		{
 			if (path.tag.EOP && path.nloop == 0)
 				break;
@@ -2411,7 +2411,7 @@ void GSState::Transfer(const u8* mem, u32 size)
 	if (m_dump && mem > start)
 		m_dump->Transfer(index, start, mem - start);
 
-	if (index == 0)
+	if constexpr (index == 0)
 	{
 		if (size == 0 && path.nloop > 0)
 		{
@@ -3037,10 +3037,10 @@ __forceinline void GSState::HandleAutoFlush()
 				{
 					for (int i = current_draw_end - 1; i >= current_draw_end - n; i--)
 					{
-						const GSVertex* v = &m_vertex.buff[m_index.buff[i]];
+						const GSVertex* cv = &m_vertex.buff[m_index.buff[i]];
 
-						tex_coord.x = (static_cast<int>(v->XYZ.X) - offset.x) >> 4;
-						tex_coord.y = (static_cast<int>(v->XYZ.Y) - offset.y) >> 4;
+						tex_coord.x = (static_cast<int>(cv->XYZ.X) - offset.x) >> 4;
+						tex_coord.y = (static_cast<int>(cv->XYZ.Y) - offset.y) >> 4;
 
 						if (i == (current_draw_end - 1))
 						{
@@ -3151,9 +3151,10 @@ __forceinline void GSState::VertexKick(u32 skip)
 
 	ASSERT(m_vertex.tail < m_vertex.maxcount + 3);
 
-	if (auto_flush && skip == 0 && m_index.tail > 0 && ((m_vertex.tail + 1) - m_vertex.head) >= n)
+	if constexpr (auto_flush)
 	{
-		HandleAutoFlush<prim, index_swap>();
+		if (skip == 0 && m_index.tail > 0 && ((m_vertex.tail + 1) - m_vertex.head) >= n)
+			HandleAutoFlush<prim, index_swap>();
 	}
 
 	u32 head = m_vertex.head;
@@ -3289,15 +3290,15 @@ __forceinline void GSState::VertexKick(u32 skip)
 	if (tail >= m_vertex.maxcount)
 		GrowVertexBuffer();
 
-	if (m_index.tail == 0 && ((m_backed_up_ctx != m_env.PRIM.CTXT) || m_dirty_gs_regs))
+	if (m_index.tail == 0 && ((static_cast<u32>(m_backed_up_ctx) != m_env.PRIM.CTXT) || m_dirty_gs_regs))
 	{
-		const int ctx = m_env.PRIM.CTXT;
+		const u32 ctx = m_env.PRIM.CTXT;
 		std::memcpy(&m_prev_env, &m_env, 88);
 		std::memcpy(&m_prev_env.CTXT[ctx], &m_env.CTXT[ctx], 96);
 		std::memcpy(&m_prev_env.CTXT[ctx].offset, &m_env.CTXT[ctx].offset, sizeof(m_env.CTXT[ctx].offset));
 		std::memcpy(&m_prev_env.CTXT[ctx].scissor, &m_env.CTXT[ctx].scissor, sizeof(m_env.CTXT[ctx].scissor));
 		m_dirty_gs_regs = 0;
-		m_backed_up_ctx = m_env.PRIM.CTXT;
+		m_backed_up_ctx = static_cast<int>(m_env.PRIM.CTXT);
 	}
 
 	u16* RESTRICT buff = &m_index.buff[m_index.tail];

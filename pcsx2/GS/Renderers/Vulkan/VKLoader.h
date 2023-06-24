@@ -80,10 +80,12 @@
 #include "VKEntryPoints.h"
 
 // We include vk_mem_alloc globally, so we don't accidentally include it before the vulkan header somewhere.
-#ifdef __clang__
+#if defined(__clang__)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wnullability-completeness"
 #pragma clang diagnostic ignored "-Wunused-variable"
+#elif defined(_MSC_VER)
+#pragma warning(push, 0)
 #endif
 
 #define VMA_STATIC_VULKAN_FUNCTIONS 1
@@ -91,8 +93,10 @@
 #define VMA_STATS_STRING_ENABLED 0
 #include "vk_mem_alloc.h"
 
-#ifdef __clang__
+#if defined(__clang__)
 #pragma clang diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 namespace Vulkan

@@ -333,12 +333,12 @@ public:
 			int lineBP = bp;
 			int startOff = firstRowPgXStart;
 			int endOff   = firstRowPgXEnd;
-			int yCnt = this->yCnt;
+			const int yCnt_ = yCnt;
 
 			if (unlikely(slowPath))
 			{
 				u32 touched[MAX_PAGES / 32] = {};
-				for (int y = 0; y < yCnt; y++)
+				for (int y = 0; y < yCnt_; y++)
 				{
 					u32 start = lineBP + startOff;
 					u32 end   = lineBP + endOff;
@@ -355,7 +355,7 @@ public:
 						touched[idx] |= mask;
 					}
 
-					if (y < yCnt - 2)
+					if (y < yCnt_ - 2)
 					{
 						// Next iteration is not last (y + 1 < yCnt - 1).
 						startOff = midRowPgXStart;
@@ -372,7 +372,7 @@ public:
 			{
 				u32 nextMin = 0;
 
-				for (int y = 0; y < yCnt; y++)
+				for (int y = 0; y < yCnt_; y++)
 				{
 					u32 start = std::max<u32>(nextMin, lineBP + startOff);
 					u32 end   = lineBP + endOff;
@@ -382,7 +382,7 @@ public:
 						if (!fn(pos % MAX_PAGES))
 							return;
 
-					if (y < yCnt - 2)
+					if (y < yCnt_ - 2)
 					{
 						// Next iteration is not last (y + 1 < yCnt - 1).
 						startOff = midRowPgXStart;

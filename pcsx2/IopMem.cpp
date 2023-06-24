@@ -561,7 +561,7 @@ std::string iopMemReadString(u32 mem, int maxlen)
     std::string ret;
     char c;
 
-    while ((c = iopMemRead8(mem++)) && maxlen--)
+    while ((c = iopMemRead8(mem++)) != 0 && maxlen--)
         ret.push_back(c);
 
     return ret;

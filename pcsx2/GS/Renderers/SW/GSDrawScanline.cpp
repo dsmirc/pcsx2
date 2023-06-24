@@ -19,6 +19,10 @@
 #include "GS/Renderers/SW/GSScanlineEnvironment.h"
 #include "GS/Renderers/SW/GSRasterizer.h"
 
+#ifdef _MSC_VER
+#pragma warning(disable : 4701) // warning C4701: potentially uninitialized local variable 'f' used
+#endif
+
 // Comment to disable all dynamic code generation.
 #define ENABLE_JIT_RASTERIZER
 
@@ -926,38 +930,38 @@ __ri void GSDrawScanline::CDrawScanline(int pixels, int left, int top, const GSV
 							vf = v.xxzzlh().srl16(12);
 						}
 
-						VectorI uv0 = u.sra32(16).ps32(v.sra32(16));
-						VectorI uv1 = uv0;
+						VectorI mip_uv0 = u.sra32(16).ps32(v.sra32(16));
+						VectorI mip_uv1 = mip_uv0;
 
 						{
-							VectorI repeat = (uv0 & minuv) | maxuv;
-							VectorI clamp = uv0.sat_i16(minuv, maxuv);
+							VectorI repeat = (mip_uv0 & minuv) | maxuv;
+							VectorI clamp = mip_uv0.sat_i16(minuv, maxuv);
 
-							uv0 = clamp.blend8(repeat, VectorI::broadcast128(global.t.mask));
+							mip_uv0 = clamp.blend8(repeat, VectorI::broadcast128(global.t.mask));
 						}
 
 						if (sel.ltf)
 						{
-							uv1 = uv1.add16(VectorI::x0001());
+							mip_uv1 = mip_uv1.add16(VectorI::x0001());
 
-							VectorI repeat = (uv1 & minuv) | maxuv;
-							VectorI clamp = uv1.sat_i16(minuv, maxuv);
+							VectorI repeat = (mip_uv1 & minuv) | maxuv;
+							VectorI clamp = mip_uv1.sat_i16(minuv, maxuv);
 
-							uv1 = clamp.blend8(repeat, VectorI::broadcast128(global.t.mask));
+							mip_uv1 = clamp.blend8(repeat, VectorI::broadcast128(global.t.mask));
 						}
 
-						VectorI y0 = uv0.uph16() << (sel.tw + 3);
-						VectorI x0 = uv0.upl16();
+						VectorI mip_y0 = mip_uv0.uph16() << (sel.tw + 3);
+						VectorI mip_x0 = mip_uv0.upl16();
 
 						if (sel.ltf)
 						{
-							VectorI y1 = uv1.uph16() << (sel.tw + 3);
-							VectorI x1 = uv1.upl16();
+							VectorI mip_y1 = mip_uv1.uph16() << (sel.tw + 3);
+							VectorI mip_x1 = mip_uv1.upl16();
 
-							addr00 = y0 + x0;
-							addr01 = y0 + x1;
-							addr10 = y1 + x0;
-							addr11 = y1 + x1;
+							addr00 = mip_y0 + mip_x0;
+							addr01 = mip_y0 + mip_x1;
+							addr10 = mip_y1 + mip_x0;
+							addr11 = mip_y1 + mip_x1;
 
 							if (sel.tlu)
 							{
@@ -1005,7 +1009,7 @@ __ri void GSDrawScanline::CDrawScanline(int pixels, int left, int top, const GSV
 						}
 						else
 						{
-							addr00 = y0 + x0;
+							addr00 = mip_y0 + mip_x0;
 
 							if (sel.tlu)
 							{
@@ -1573,10 +1577,10 @@ __ri void GSDrawScanline::CDrawScanline(int pixels, int left, int top, const GSV
 
 				if (sel.fpsm == 2)
 				{
-					VectorI rb = fs & 0x00f800f8;
-					VectorI ga = fs & 0x8000f800;
+					VectorI rb_16b = fs & 0x00f800f8;
+					VectorI ga_16b = fs & 0x8000f800;
 
-					fs = (ga >> 16) | (rb >> 9) | (ga >> 6) | (rb >> 3);
+					fs = (ga_16b >> 16) | (rb_16b >> 9) | (ga_16b >> 6) | (rb_16b >> 3);
 				}
 
 				if (sel.rfb)
@@ -1836,7 +1840,7 @@ __ri static void DrawRectT(const GSOffset& off, const GSVector4i& r, u32 c, u32 
 
 #endif
 
-	if (sizeof(T) == sizeof(u16))
+	if constexpr (sizeof(T) == sizeof(u16))
 	{
 		color = color.xxzzlh();
 		mask = mask.xxzzlh();

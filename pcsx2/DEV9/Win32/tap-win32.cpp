@@ -275,7 +275,7 @@ PIP_ADAPTER_ADDRESSES FindAdapterViaIndex(PIP_ADAPTER_ADDRESSES adapterList, int
 	PIP_ADAPTER_ADDRESSES currentAdapter = adapterList;
 	do
 	{
-		if (currentAdapter->IfIndex == ifIndex)
+		if (currentAdapter->IfIndex == static_cast<IF_INDEX>(ifIndex))
 			break;
 
 		currentAdapter = currentAdapter->Next;
@@ -404,7 +404,7 @@ bool TAPGetWin32Adapter(const std::string& name, PIP_ADAPTER_ADDRESSES adapter, 
 		{
 			int targetIndex = searchList[vi];
 			MIB_IFSTACK_ROW row = table->Table[i];
-			if (row.LowerLayerInterfaceIndex == targetIndex)
+			if (row.LowerLayerInterfaceIndex == static_cast<NET_IFINDEX>(targetIndex))
 			{
 				const PIP_ADAPTER_ADDRESSES potentialAdapter = FindAdapterViaIndex(AdapterInfoReduced.get(), row.HigherLayerInterfaceIndex);
 				if (potentialAdapter != nullptr)
@@ -648,7 +648,7 @@ bool TAPAdapter::send(NetPacket* pkt)
 
 	if (result)
 	{
-		if (writen != pkt->size)
+		if (writen != static_cast<DWORD>(pkt->size))
 			return false;
 
 		return true;

@@ -547,9 +547,9 @@ const xRegister32
 	// Assigns the current emitter buffer target address.
 	// This is provided instead of using x86Ptr directly, since we may in the future find
 	// a need to change the storage class system for the x86Ptr 'under the hood.'
-	__emitinline void xSetPtr(void* ptr)
+	__emitinline void xSetPtr(void* ptr_)
 	{
-		x86Ptr = (u8*)ptr;
+		x86Ptr = static_cast<u8*>(ptr_);
 	}
 
 	// Retrieves the current emitter buffer target address.

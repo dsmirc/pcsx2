@@ -30,7 +30,7 @@
 #define CARD_SIZE_ECC (1024 * BLOCK_SIZE_ECC)
 
 
-static volatile u32 ctrl, cmd = (u32)-1, address, id, counter, addrbyte;
+static u32 ctrl, cmd = (u32)-1, address, id, counter, addrbyte;
 static u8 data[PAGE_SIZE_ECC], file[CARD_SIZE_ECC];
 
 static void xfromman_call20_calculateXors(unsigned char buffer[128], unsigned char blah[4]);
@@ -44,9 +44,9 @@ static void calculateECC(u8 page[PAGE_SIZE_ECC])
 	xfromman_call20_calculateXors(page + 3 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 3 * 3); //(ECC_SIZE>>2));
 }
 
-static const char* getCmdName(u32 cmd)
+static const char* getCmdName(u32 cmd_)
 {
-	switch (cmd)
+	switch (cmd_)
 	{
 		case SM_CMD_READ1:
 			return "READ1";

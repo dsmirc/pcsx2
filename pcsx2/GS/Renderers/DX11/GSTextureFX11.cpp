@@ -185,11 +185,11 @@ void GSDevice11::SetupPS(const PSSelector& sel, const GSHWDrawConfig::PSConstant
 			ASSERT(ssel.biln == 0);
 		}
 
-		auto i = std::as_const(m_ps_ss).find(ssel.key);
+		auto it = std::as_const(m_ps_ss).find(ssel.key);
 
-		if (i != m_ps_ss.end())
+		if (it != m_ps_ss.end())
 		{
-			ss0 = i->second;
+			ss0 = it->second;
 		}
 		else
 		{

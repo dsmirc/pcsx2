@@ -207,9 +207,6 @@ bool GSDeviceOGL::Create()
 		//glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS_ARB);
 	}
 
-	// WARNING it must be done after the control setup (at least on MESA)
-	GL_PUSH("GSDeviceOGL::Create");
-
 	// ****************************************************************
 	// Various object
 	// ****************************************************************
@@ -940,7 +937,7 @@ void GSDeviceOGL::CommitClear(GSTexture* t, bool use_write_fbo)
 			}
 			else
 			{
-				glClearBufferfv(GL_COLOR, 0, c_unorm.v);
+				glClearBufferfv(GL_COLOR, 0, c_unorm.F32);
 			}
 
 			OMSetColorMaskState(OMColorMaskSelector(old_color_mask));
@@ -1606,7 +1603,7 @@ void GSDeviceOGL::DoMerge(GSTexture* sTex[3], GSVector4* sRect, GSTexture* dTex,
 		{
 			// Blend with a constant alpha
 			m_merge_obj.ps[1].Bind();
-			m_merge_obj.ps[1].Uniform4fv(0, GSVector4::unorm8(c).v);
+			m_merge_obj.ps[1].Uniform4fv(0, GSVector4::unorm8(c).F32);
 			StretchRect(sTex[0], sRect[0], dTex, dRect[0], m_merge_obj.ps[1], true, OMColorMaskSelector(), linear);
 		}
 		else

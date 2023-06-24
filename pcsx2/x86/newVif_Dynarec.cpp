@@ -349,13 +349,13 @@ void VifUnpackSSE_Dynarec::CompileRoutine()
 	xRET();
 }
 
-static u16 dVifComputeLength(uint cl, uint wl, u8 num, bool isFill)
+static u16 dVifComputeLength(uint cl_, uint wl, u8 num, bool isFill)
 {
 	uint length = (num > 0) ? (num * 16) : 4096; // 0 = 256
 
 	if (!isFill)
 	{
-		uint skipSize = (cl - wl) * 16;
+		uint skipSize = (cl_ - wl) * 16;
 		uint blocks   = (num + (wl - 1)) / wl; //Need to round up num's to calculate skip size correctly.
 		length += (blocks - 1) * skipSize;
 	}

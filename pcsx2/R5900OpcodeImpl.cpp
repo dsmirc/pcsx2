@@ -1039,7 +1039,7 @@ void SYSCALL()
 				if (!CurrentBiosInformation.eeThreadListAddr)
 				{
 					// We couldn't find the address
-					CurrentBiosInformation.eeThreadListAddr = -1;
+					CurrentBiosInformation.eeThreadListAddr = static_cast<u32>(-1);
 					// If you're here because a user has reported this message, this means that the instruction pattern is not present on their bios, or it is aligned weirdly.
 					Console.Warning("BIOS Warning: Unable to get a thread list offset. The debugger thread and stack frame views will not be functional.");
 				}

@@ -52,6 +52,11 @@ extern "C" {
 
 #include <mutex>
 
+// Disable deprecated warnings on MSVC, we're deliberately using older stuff for wider compatibility.
+#ifdef _MSC_VER
+#pragma warning(disable: 4996)
+#endif
+
 // Compatibility with both ffmpeg 4.x and 5.x.
 #if (LIBAVFORMAT_VERSION_MAJOR < 59)
 #define ff_const59

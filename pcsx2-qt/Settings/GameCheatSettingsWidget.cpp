@@ -53,11 +53,11 @@ GameCheatSettingsWidget::~GameCheatSettingsWidget() = default;
 
 void GameCheatSettingsWidget::onCheatListItemDoubleClicked(QTreeWidgetItem* item, int column)
 {
-	QVariant data = item->data(0, Qt::UserRole);
-	if (!data.isValid())
+	const QVariant item_data = item->data(0, Qt::UserRole);
+	if (!item_data.isValid())
 		return;
 
-	std::string cheat_name = data.toString().toStdString();
+	std::string cheat_name = item_data.toString().toStdString();
 	const bool new_state = !(item->checkState(0) == Qt::Checked);
 	item->setCheckState(0, new_state ? Qt::Checked : Qt::Unchecked);
 	setCheatEnabled(std::move(cheat_name), new_state, true);
@@ -65,11 +65,11 @@ void GameCheatSettingsWidget::onCheatListItemDoubleClicked(QTreeWidgetItem* item
 
 void GameCheatSettingsWidget::onCheatListItemChanged(QTreeWidgetItem* item, int column)
 {
-	QVariant data = item->data(0, Qt::UserRole);
-	if (!data.isValid())
+	const QVariant item_data = item->data(0, Qt::UserRole);
+	if (!item_data.isValid())
 		return;
 
-	std::string cheat_name = data.toString().toStdString();
+	std::string cheat_name = item_data.toString().toStdString();
 	const bool current_enabled =
 		(std::find(m_enabled_patches.begin(), m_enabled_patches.end(), cheat_name) != m_enabled_patches.end());
 	const bool current_checked = (item->checkState(0) == Qt::Checked);
@@ -134,14 +134,14 @@ void GameCheatSettingsWidget::setStateRecursively(QTreeWidgetItem* parent, bool 
 	const int count = parent ? parent->childCount() : m_ui.cheatList->topLevelItemCount();
 	for (int i = 0; i < count; i++)
 	{
-		QTreeWidgetItem* item = parent ? parent->child(i) : m_ui.cheatList->topLevelItem(i);
-		QVariant data = item->data(0, Qt::UserRole);
-		if (data.isValid())
+		QTreeWidgetItem* const item = parent ? parent->child(i) : m_ui.cheatList->topLevelItem(i);
+		const QVariant item_data = item->data(0, Qt::UserRole);
+		if (item_data.isValid())
 		{
 			if ((item->checkState(0) == Qt::Checked) != enabled)
 			{
 				item->setCheckState(0, enabled ? Qt::Checked : Qt::Unchecked);
-				setCheatEnabled(data.toString().toStdString(), enabled, false);
+				setCheatEnabled(item_data.toString().toStdString(), enabled, false);
 			}
 		}
 		else

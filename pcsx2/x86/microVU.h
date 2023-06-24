@@ -146,15 +146,19 @@ public:
 			const u64 quick64 = pState->quick64[0];
 			for (const microBlockLinkRef& ref : quickLookup)
 			{
-				if (ref.quick != quick64) continue;
-				if (doConstProp && (ref.pBlock->pState.vi15 != pState->vi15))  continue;
-				if (doConstProp && (ref.pBlock->pState.vi15v != pState->vi15v)) continue;
+				if (ref.quick != quick64)
+					continue;
+				if constexpr (doConstProp)
+				{
+					if (ref.pBlock->pState.vi15 != pState->vi15 || ref.pBlock->pState.vi15v != pState->vi15v)
+						continue;
+				}
 				return ref.pBlock;
 			}
 		}
 		return nullptr;
 	}
-	void printInfo(int pc, bool printQuick)
+	void printInfo(int pc_, bool printQuick)
 	{
 		int listI = printQuick ? qListI : fListI;
 		if (listI < 7)
@@ -169,7 +173,7 @@ public:
 			DevCon.WriteLn(Color_Green,
 				"[%04x][Block #%d][crc=%08x][q=%02d][p=%02d][xgkick=%d][vi15=%04x][vi15v=%d][viBackup=%02d]"
 				"[flags=%02x][exactMatch=%x][blockType=%d][viCRC=%08x][vfCRC=%08x]",
-				pc, i, crc, linkI->block.pState.q,
+				pc_, i, crc, linkI->block.pState.q,
 				linkI->block.pState.p, linkI->block.pState.xgkick, linkI->block.pState.vi15, linkI->block.pState.vi15v,
 				linkI->block.pState.viBackUp, linkI->block.pState.flagInfo, linkI->block.pState.needExactMatch,
 				linkI->block.pState.blockType, viCRC, vfCRC);

@@ -311,9 +311,9 @@ void GSRendererHW::Lines2Sprites()
 			v0.XYZ.X = v1.XYZ.X;
 			v1.XYZ.X = x;
 
-			const float s = v0.ST.S;
+			const float s_ = v0.ST.S;
 			v0.ST.S = v1.ST.S;
-			v1.ST.S = s;
+			v1.ST.S = s_;
 
 			const u16 u = v0.U;
 			v0.U = v1.U;
@@ -984,7 +984,7 @@ bool GSRendererHW::CheckNextDrawForSplitClear(const GSVector4i& r, u32* pages_co
 		return false;
 
 	// rect width should match the FBW (page aligned)
-	if (r.width() != m_cached_ctx.FRAME.FBW * 64)
+	if (r.width() != static_cast<s32>(m_cached_ctx.FRAME.FBW * 64u))
 		return false;
 
 	// next FBP should point to the end of the rect
@@ -2029,7 +2029,7 @@ void GSRendererHW::Draw()
 	}
 
 	GSTextureCache::Target* rt = nullptr;
-	GIFRegTEX0 FRAME_TEX0;
+	GIFRegTEX0 FRAME_TEX0 = {};
 	if (!no_rt)
 	{
 		// FBW is going to be wrong for channel shuffling into a new target, so take it from the source.
@@ -2057,7 +2057,7 @@ void GSRendererHW::Draw()
 	}
 
 	GSTextureCache::Target* ds = nullptr;
-	GIFRegTEX0 ZBUF_TEX0;
+	GIFRegTEX0 ZBUF_TEX0 = {};
 	if (!no_ds)
 	{
 		ZBUF_TEX0.U64 = 0;
@@ -5522,7 +5522,7 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 	const u32 first_dpX = v[1].XYZ.X - v[0].XYZ.X;
 
 	// Horizontal Match.
-	if ((first_dpX >> 4) == m_r.z)
+	if ((first_dpX >> 4) == static_cast<u32>(m_r.z))
 	{
 		// Borrowed from MergeSprite() modified to calculate heights.
 		u32 last_pY = v[1].XYZ.Y;
@@ -5542,7 +5542,7 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 	}
 
 	// Vertical Match.
-	if ((first_dpY >> 4) == m_r.w)
+	if ((first_dpY >> 4) == static_cast<u32>(m_r.w))
 	{
 		// Borrowed from MergeSprite().
 		u32 last_pX = v[1].XYZ.X;

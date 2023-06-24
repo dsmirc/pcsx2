@@ -1346,8 +1346,6 @@ QString QtHost::GetAppNameAndVersion()
 	{
 		return QStringLiteral("PCSX2 " GIT_REV);
 	}
-
-	return ret;
 }
 
 QString QtHost::GetAppConfigSuffix()

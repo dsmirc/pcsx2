@@ -409,7 +409,7 @@ __ri static int BitstreamInit ()
 static int GetMacroblockModes()
 {
 	int macroblock_modes;
-	const MBtab * tab;
+	const MBtab * ltab;
 
 	switch (decoder.coding_type)
 	{
@@ -418,9 +418,9 @@ static int GetMacroblockModes()
 
 			if (macroblock_modes == 0) return 0;   // error
 
-			tab = MB_I + (macroblock_modes >> 1);
-			DUMPBITS(tab->len);
-			macroblock_modes = tab->modes;
+			ltab = MB_I + (macroblock_modes >> 1);
+			DUMPBITS(ltab->len);
+			macroblock_modes = ltab->modes;
 
 			if ((!(decoder.frame_pred_frame_dct)) &&
 				(decoder.picture_structure == FRAME_PICTURE))
@@ -434,9 +434,9 @@ static int GetMacroblockModes()
 
 			if (macroblock_modes == 0) return 0;   // error
 
-			tab = MB_P + (macroblock_modes >> 1);
-			DUMPBITS(tab->len);
-			macroblock_modes = tab->modes;
+			ltab = MB_P + (macroblock_modes >> 1);
+			DUMPBITS(ltab->len);
+			macroblock_modes = ltab->modes;
 
 			if (decoder.picture_structure != FRAME_PICTURE)
 			{
@@ -474,9 +474,9 @@ static int GetMacroblockModes()
 
 			if (macroblock_modes == 0) return 0;   // error
 
-			tab = MB_B + macroblock_modes;
-			DUMPBITS(tab->len);
-			macroblock_modes = tab->modes;
+			ltab = MB_B + macroblock_modes;
+			DUMPBITS(ltab->len);
+			macroblock_modes = ltab->modes;
 
 			if (decoder.picture_structure != FRAME_PICTURE)
 			{
@@ -484,13 +484,13 @@ static int GetMacroblockModes()
 				{
 					macroblock_modes |= GETBITS(2) * MOTION_TYPE_BASE;
 				}
-				return (macroblock_modes | (tab->len << 16));
+				return (macroblock_modes | (ltab->len << 16));
 			}
 			else if (decoder.frame_pred_frame_dct)
 			{
 				/* if (! (macroblock_modes & MACROBLOCK_INTRA)) */
 				macroblock_modes |= MC_FRAME;
-				return (macroblock_modes | (tab->len << 16));
+				return (macroblock_modes | (ltab->len << 16));
 			}
 			else
 			{
@@ -503,7 +503,7 @@ static int GetMacroblockModes()
 intra:
 					macroblock_modes |= GETBITS(1) * DCT_TYPE_INTERLACED;
 				}
-				return (macroblock_modes | (tab->len << 16));
+				return (macroblock_modes | (ltab->len << 16));
 			}
 
 		case D_TYPE:
@@ -777,9 +777,6 @@ __ri static bool get_intra_block()
 		}
 	 }
   }
-
-  ipu_cmd.pos[4] = 0;
-  return true;
 }
 
 __ri static bool get_non_intra_block(int * last)
@@ -920,9 +917,6 @@ __ri static bool get_non_intra_block(int * last)
 			ipu_cmd.pos[5] = 0;
 		}
 	}
-
-	ipu_cmd.pos[4] = 0;
-	return true;
 }
 
 __ri static bool slice_intra_DCT(const int cc, u8 * const dest, const int stride, const bool skip)
@@ -1409,16 +1403,16 @@ __fi static bool mpeg2_slice()
 				case 0:
 					{
 						// Get coded block pattern
-						const CBPtab* tab;
+						const CBPtab* ltab;
 						u16 code = UBITS(16);
 
 						if (code >= 0x2000)
-							tab = CBP_7 + (UBITS(7) - 16);
+							ltab = CBP_7 + (UBITS(7) - 16);
 						else
-							tab = CBP_9 + UBITS(9);
+							ltab = CBP_9 + UBITS(9);
 
-						DUMPBITS(tab->len);
-						decoder.coded_block_pattern = tab->cbp;
+						DUMPBITS(ltab->len);
+						decoder.coded_block_pattern = ltab->cbp;
 					}
 					[[fallthrough]];
 
@@ -1620,28 +1614,28 @@ __fi static bool ipuVDEC(u32 val)
 						}
 						else
 						{
-							const MVtab* tab;
+							const MVtab* ltab;
 							if ((code & 0xf000) || ((code & 0xfc00) == 0x0c00))
-								tab = MV_4 + UBITS(4);
+								ltab = MV_4 + UBITS(4);
 							else
-								tab = MV_10 + UBITS(10);
+								ltab = MV_10 + UBITS(10);
 
-							const int delta = tab->delta + 1;
-							DUMPBITS(tab->len);
+							const int delta = ltab->delta + 1;
+							DUMPBITS(ltab->len);
 
 							const int sign = SBITS(1);
 							DUMPBITS(1);
 
-							ipuRegs.cmd.DATA = (((delta ^ sign) - sign) | (tab->len << 16));
+							ipuRegs.cmd.DATA = (((delta ^ sign) - sign) | (ltab->len << 16));
 						}
 					}
 					break;
 
 				case 3://DMVector
 					{
-						const DMVtab* tab = DMV_2 + UBITS(2);
-						DUMPBITS(tab->len);
-						ipuRegs.cmd.DATA = (tab->dmv | (tab->len << 16));
+						const DMVtab* ltab = DMV_2 + UBITS(2);
+						DUMPBITS(ltab->len);
+						ipuRegs.cmd.DATA = (ltab->dmv | (ltab->len << 16));
 					}
 					break;
 
@@ -1677,10 +1671,9 @@ __fi static bool ipuVDEC(u32 val)
 
 			return true;
 
-		jNO_DEFAULT
+		default:
+			return false;
 	}
-
-	return false;
 }
 
 __ri static bool ipuFDEC(u32 val)

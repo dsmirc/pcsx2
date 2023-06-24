@@ -90,7 +90,7 @@ public:
 
 #else
 
-		if (alignment != 0)
+		if constexpr (alignment != 0)
 		{
 			v0 = GSVector4i::load<true>(&s0[0]);
 			v1 = GSVector4i::load<true>(&s0[16]);
@@ -156,7 +156,7 @@ public:
 
 #else
 
-		if (alignment != 0)
+		if constexpr (alignment != 0)
 		{
 			v0 = GSVector4i::load<true>(&s0[0]);
 			v1 = GSVector4i::load<true>(&s0[16]);
@@ -204,7 +204,7 @@ public:
 		GSVector8i v2 = v0.blend32<0xaa>(v1).shuffle8(GSVector8i::broadcast128(m_avx2_w8mask1)).acbd();
 		GSVector8i v3 = v1.blend32<0xaa>(v0).shuffle8(GSVector8i::broadcast128(m_avx2_w8mask2)).acbd();
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			((GSVector8i*)dst)[i * 2 + 0] = v2;
 			((GSVector8i*)dst)[i * 2 + 1] = v3;
@@ -222,7 +222,7 @@ public:
 		GSVector4i v2 = GSVector4i::load<alignment != 0>(&src[srcpitch * 2]);
 		GSVector4i v3 = GSVector4i::load<alignment != 0>(&src[srcpitch * 3]);
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			v2 = v2.yxwz();
 			v3 = v3.yxwz();
@@ -262,7 +262,7 @@ public:
 		v0 = v0.shuffle8(GSVector8i::broadcast128(m_w4mask)).acbd();
 		v1 = v1.shuffle8(GSVector8i::broadcast128(m_w4mask)).acbd();
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			v0 = v0.xzyw();
 			v1 = v1.ywxz();
@@ -286,7 +286,7 @@ public:
 		GSVector4i v2 = GSVector4i::load<alignment != 0>(&src[srcpitch * 2]);
 		GSVector4i v3 = GSVector4i::load<alignment != 0>(&src[srcpitch * 3]);
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			v2 = v2.yxwzlh();
 			v3 = v3.yxwzlh();
@@ -498,7 +498,7 @@ public:
 
 		GSVector8i v0, v1;
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			v0 = s[i * 2 + 0];
 			v1 = s[i * 2 + 1];
@@ -572,7 +572,7 @@ public:
 		GSVector8i::sw32_inv(v0, v1);
 		GSVector8i::mix4(v0, v1);
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			v0 = v0.xzyw();
 			v1 = v1.zxwy();
@@ -609,7 +609,7 @@ public:
 		GSVector4 v2f = GSVector4::cast(v2);
 		GSVector4 v3f = GSVector4::cast(v3);
 
-		if ((i & 1) == 0)
+		if constexpr ((i & 1) == 0)
 		{
 			v0 = GSVector4i::cast(v0f.xzxz(v2f)).shuffle8(m_r4mask);
 			v1 = GSVector4i::cast(v0f.ywyw(v2f)).shuffle8(m_r4mask);
@@ -857,7 +857,7 @@ public:
 
 			v0 = (v0 >> shift).ps32(v1 >> shift).pu16((v2 >> shift).ps32(v3 >> shift));
 
-			if (mask != 0xffffffff)
+			if constexpr (mask != 0xffffffff)
 				v0 = v0 & maskvec;
 
 			v4 = v0.extract<0>();
@@ -890,7 +890,7 @@ public:
 
 			v0 = ((v0 >> shift).ps32(v1 >> shift)).pu16((v2 >> shift).ps32(v3 >> shift));
 
-			if (mask != 0xffffffff)
+			if constexpr (mask != 0xffffffff)
 				v0 = v0 & maskvec;
 
 			GSVector4i::storel(dst, v0);
@@ -1095,7 +1095,7 @@ public:
 
 			GSVector4i v0 = s[j * 2 + 0] >> shift;
 			GSVector4i v1 = s[j * 2 + 1] >> shift;
-			if (mask != 0xff)
+			if constexpr (mask != 0xff)
 			{
 				v0 = v0 & mask;
 				v1 = v1 & mask;
@@ -1114,7 +1114,7 @@ public:
 
 			GSVector4i v0 = s[j * 2 + 0] >> shift;
 			GSVector4i v1 = s[j * 2 + 1] >> shift;
-			if (mask != 0xff)
+			if constexpr (mask != 0xff)
 			{
 				v0 = v0 & mask;
 				v1 = v1 & mask;
@@ -1254,7 +1254,7 @@ public:
 
 		for (int i = 0; i < 2; i++, src += srcpitch * 4, d += 4)
 		{
-			if (mask == 0xff000000)
+			if constexpr (mask == 0xff000000)
 			{
 				v4 = GSVector4i::loadl(&src[srcpitch * 0]);
 				v5 = GSVector4i::loadl(&src[srcpitch * 1]);
@@ -1269,19 +1269,16 @@ public:
 				v4 = GSVector4i::load(*(u32*)&src[srcpitch * 0]).upl32(GSVector4i::load(*(u32*)&src[srcpitch * 2]));
 				v5 = GSVector4i::load(*(u32*)&src[srcpitch * 1]).upl32(GSVector4i::load(*(u32*)&src[srcpitch * 3]));
 
-				if (mask == 0x0f000000)
+				static_assert(mask == 0x0f000000 || mask == 0xf0000000);
+				if constexpr (mask == 0x0f000000)
 				{
 					v6 = v4.upl8(v4 >> 4);
 					v7 = v5.upl8(v5 >> 4);
 				}
-				else if (mask == 0xf0000000)
+				else if constexpr (mask == 0xf0000000)
 				{
 					v6 = (v4 << 4).upl8(v4);
 					v7 = (v5 << 4).upl8(v5);
-				}
-				else
-				{
-					ASSERT(0);
 				}
 
 				v4 = v6.upl16(v7);
@@ -1887,7 +1884,7 @@ public:
 			v3 = s[i * 4 + 3] >> shift;
 
 			GSVector8i all = v0.ps32(v1).pu16(v2.ps32(v3)).xzyw().acbd().shuffle8(shufvec);
-			if (mask != 0xffffffff)
+			if constexpr (mask != 0xffffffff)
 				all = all & mask;
 
 			ReadClut4(p0, p1, p2, p3, all, *d0, *d1, *d2, *d3);
@@ -1916,7 +1913,7 @@ public:
 			v3 = s[i * 4 + 3] >> shift;
 
 			GSVector4i all = v0.ps32(v1).pu16(v2.ps32(v3)).shuffle8(m_r4hmask);
-			if (mask != 0xffffffff)
+			if constexpr (mask != 0xffffffff)
 				all = all & mask;
 
 			ReadClut4(p0, p1, p2, p3, all, d0[0], d0[1], d1[0], d1[1]);

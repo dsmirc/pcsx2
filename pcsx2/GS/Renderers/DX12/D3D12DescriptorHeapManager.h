@@ -129,8 +129,8 @@ class D3D12GroupedSamplerAllocator : private D3D12DescriptorAllocator
 		__fi std::size_t operator()(const Key& key) const
 		{
 			size_t seed = 0;
-			for (u32 key : key.idx)
-				HashCombine(seed, key);
+			for (u32 key_ : key.idx)
+				HashCombine(seed, key_);
 			return seed;
 		}
 	};

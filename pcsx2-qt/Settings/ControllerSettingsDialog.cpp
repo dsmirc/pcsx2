@@ -449,9 +449,9 @@ void ControllerSettingsDialog::updateListDescription(u32 global_slot, Controller
 {
 	for (int i = 0; i < m_ui.settingsCategory->count(); i++)
 	{
-		QListWidgetItem* item = m_ui.settingsCategory->item(i);
-		const QVariant data(item->data(Qt::UserRole));
-		if (data.metaType().id() == QMetaType::UInt && data.toUInt() == global_slot)
+		QListWidgetItem* const item = m_ui.settingsCategory->item(i);
+		const QVariant item_data(item->data(Qt::UserRole));
+		if (item_data.metaType().id() == QMetaType::UInt && item_data.toUInt() == global_slot)
 		{
 			const auto [port, slot] = sioConvertPadToPortAndSlot(global_slot);
 			const bool mtap_enabled = getBoolValue("Pad", (port == 0) ? "MultitapPort1" : "MultitapPort2", false);
@@ -473,9 +473,9 @@ void ControllerSettingsDialog::updateListDescription(u32 port, USBDeviceWidget* 
 {
 	for (int i = 0; i < m_ui.settingsCategory->count(); i++)
 	{
-		QListWidgetItem* item = m_ui.settingsCategory->item(i);
-		const QVariant data(item->data(Qt::UserRole));
-		if (data.metaType().id() == QMetaType::UInt && data.toUInt() == (MAX_PORTS + port))
+		QListWidgetItem* const item = m_ui.settingsCategory->item(i);
+		const QVariant item_data(item->data(Qt::UserRole));
+		if (item_data.metaType().id() == QMetaType::UInt && item_data.toUInt() == (MAX_PORTS + port))
 		{
 			const std::string dtype(getStringValue(fmt::format("USB{}", port + 1).c_str(), "Type", "None"));
 			const QString display_name(qApp->translate("USB", USB::GetDeviceName(dtype)));

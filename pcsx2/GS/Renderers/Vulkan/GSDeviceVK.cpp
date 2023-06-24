@@ -1935,20 +1935,20 @@ bool GSDeviceVK::CompileConvertPipelines()
 		{
 			// compile color copy pipelines
 			gpb.SetRenderPass(m_utility_color_render_pass_discard, 0);
-			for (u32 i = 0; i < 16; i++)
+			for (u32 j = 0; j < 16; j++)
 			{
-				pxAssert(!m_color_copy[i]);
+				pxAssert(!m_color_copy[j]);
 				gpb.ClearBlendAttachments();
 				gpb.SetBlendAttachment(0, false, VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD,
-					VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, static_cast<VkColorComponentFlags>(i));
-				m_color_copy[i] =
+					VK_BLEND_FACTOR_ONE, VK_BLEND_FACTOR_ZERO, VK_BLEND_OP_ADD, static_cast<VkColorComponentFlags>(j));
+				m_color_copy[j] =
 					gpb.Create(g_vulkan_context->GetDevice(), g_vulkan_shader_cache->GetPipelineCache(true), false);
-				if (!m_color_copy[i])
+				if (!m_color_copy[j])
 					return false;
 
-				Vulkan::SetObjectName(g_vulkan_context->GetDevice(), m_color_copy[i],
-					"Color copy pipeline (r=%u, g=%u, b=%u, a=%u)", i & 1u, (i >> 1) & 1u, (i >> 2) & 1u,
-					(i >> 3) & 1u);
+				Vulkan::SetObjectName(g_vulkan_context->GetDevice(), m_color_copy[j],
+					"Color copy pipeline (r=%u, g=%u, b=%u, a=%u)", j & 1u, (j >> 1) & 1u, (j >> 2) & 1u,
+					(j >> 3) & 1u);
 			}
 		}
 		else if (i == ShaderConvert::HDR_INIT || i == ShaderConvert::HDR_RESOLVE)
@@ -3204,7 +3204,7 @@ __ri void GSDeviceVK::ApplyBaseState(u32 flags, VkCommandBuffer cmdbuf)
 	if (flags & DIRTY_FLAG_BLEND_CONSTANTS)
 	{
 		const GSVector4 col(static_cast<float>(m_blend_constant_color) / 128.0f);
-		vkCmdSetBlendConstants(cmdbuf, col.v);
+		vkCmdSetBlendConstants(cmdbuf, col.F32);
 	}
 }
 

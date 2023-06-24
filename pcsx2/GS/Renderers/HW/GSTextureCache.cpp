@@ -1734,8 +1734,8 @@ void GSTextureCache::InvalidateVideoMem(const GSOffset& off, const GSVector4i& r
 			// Detect half of the render target (fix snow engine game)
 			// Target Page (8KB) have always a width of 64 pixels
 			// Half of the Target is TBW/2 pages * 8KB / (1 block * 256B) = 0x10
-			auto& list = m_src.m_map[bbp >> 5];
-			for (auto i = list.begin(); i != list.end();)
+			auto& hlist = m_src.m_map[bbp >> 5];
+			for (auto i = hlist.begin(); i != hlist.end();)
 			{
 				Source* s = *i;
 				++i;
@@ -2875,12 +2875,12 @@ void GSTextureCache::CopyPages(Target* src, u32 sbw, u32 src_offset, Target* dst
 	for (u32 i = 0; i < num_pages; i++)
 	{
 		const u32 src_page_num = src_offset + i;
-		const GSVector2i src_offset = GSVector2i((src_page_num % sbw) * pgs.x, (src_page_num / sbw) * pgs.y);
+		const GSVector2i src_offset_xy = GSVector2i((src_page_num % sbw) * pgs.x, (src_page_num / sbw) * pgs.y);
 		const u32 dst_page_num = dst_offset + i;
-		const GSVector2i dst_offset = GSVector2i((dst_page_num % dbw) * pgs.x, (dst_page_num / dbw) * pgs.y);
+		const GSVector2i dst_offset_xy = GSVector2i((dst_page_num % dbw) * pgs.x, (dst_page_num / dbw) * pgs.y);
 
-		const GSVector4i src_rect = page_rc + GSVector4i(src_offset).xyxy();
-		const GSVector4i dst_rect = page_rc + GSVector4i(dst_offset).xyxy();
+		const GSVector4i src_rect = page_rc + GSVector4i(src_offset_xy).xyxy();
+		const GSVector4i dst_rect = page_rc + GSVector4i(dst_offset_xy).xyxy();
 
 		GL_INS("Copy page %u @ <%d,%d=>%d,%d> to %u @ <%d,%d=>%d,%d>", src_page_num, src_rect.x, src_rect.y, src_rect.z,
 			src_rect.w, dst_page_num, dst_rect.x, dst_rect.y, dst_rect.z, dst_rect.w);

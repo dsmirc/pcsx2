@@ -271,7 +271,7 @@ void ConvertVertexBuffer(const GSDrawingContext* RESTRICT ctx, GSVertexSW* RESTR
 			}
 		}
 
-		if (primclass == GS_SPRITE_CLASS)
+		if constexpr (primclass == GS_SPRITE_CLASS)
 		{
 			dst->p = GSVector4(xy).xyyw(GSVector4(xyzuvf)) * s_pos_scale;
 
@@ -1162,17 +1162,12 @@ bool GSRendererSW::GetScanlineGlobalData(SharedData* data)
 					m_vt.m_min.t *= 0.5f;
 					m_vt.m_max.t *= 0.5f;
 
-					GSTextureCacheSW::Texture* t = m_tc->Lookup(MIP_TEX0, env.TEXA, gd.sel.tw + 3);
+					GSTextureCacheSW::Texture* mip_t = m_tc->Lookup(MIP_TEX0, env.TEXA, gd.sel.tw + 3);
+					pxAssert(mip_t);
 
-					if (t == NULL)
-					{
-						ASSERT(0);
-						return false;
-					}
+					const GSVector4i tr = GetTextureMinMax(MIP_TEX0, MIP_CLAMP, gd.sel.ltf, true).coverage;
 
-					GSVector4i r = GetTextureMinMax(MIP_TEX0, MIP_CLAMP, gd.sel.ltf, true).coverage;
-
-					data->SetSource(t, r, i);
+					data->SetSource(mip_t, tr, i);
 				}
 
 				m_vt.m_min.t = tmin;
@@ -1197,9 +1192,9 @@ bool GSRendererSW::GetScanlineGlobalData(SharedData* data)
 
 					for (int i = 0, j = data->vertex_count; i < j; i++)
 					{
-						GSVector4 t = v[i].t;
+						GSVector4 vt = v[i].t;
 
-						v[i].t = (t - half).xyzw(t);
+						v[i].t = (vt - half).xyzw(vt);
 					}
 				}
 			}
@@ -1557,7 +1552,7 @@ void GSRendererSW::SharedData::UpdateSource()
 
 	if (GSConfig.DumpGSData)
 	{
-		u64 frame = g_perfmon.GetFrame();
+		const u64 pframe = g_perfmon.GetFrame();
 
 		std::string s;
 
@@ -1567,7 +1562,7 @@ void GSRendererSW::SharedData::UpdateSource()
 			{
 				const GIFRegTEX0& TEX0 = g_gs_renderer->GetTex0Layer(i);
 
-				s = GetDrawDumpPath("%05d_f%lld_itex%d_%05x_%s.bmp", g_gs_renderer->s_n, frame, i, TEX0.TBP0, psm_str(TEX0.PSM));
+				s = GetDrawDumpPath("%05d_f%lld_itex%d_%05x_%s.bmp", g_gs_renderer->s_n, pframe, i, TEX0.TBP0, psm_str(TEX0.PSM));
 
 				m_tex[i].t->Save(s);
 			}
@@ -1578,7 +1573,7 @@ void GSRendererSW::SharedData::UpdateSource()
 
 				t->Update(GSVector4i(0, 0, 256, 1), global.clut, sizeof(u32) * 256);
 
-				s = GetDrawDumpPath("%05d_f%lld_itexp_%05x_%s.bmp", g_gs_renderer->s_n, frame, (int)g_gs_renderer->m_context->TEX0.CBP, psm_str(g_gs_renderer->m_context->TEX0.CPSM));
+				s = GetDrawDumpPath("%05d_f%lld_itexp_%05x_%s.bmp", g_gs_renderer->s_n, pframe, (int)g_gs_renderer->m_context->TEX0.CBP, psm_str(g_gs_renderer->m_context->TEX0.CPSM));
 
 				t->Save(s);
 

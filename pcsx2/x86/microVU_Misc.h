@@ -72,11 +72,11 @@ alignas(32) static const mVU_Globals mVUglob = {
 	__four(0.000030517578125) // ITOF_15
 };
 
-static const uint _Ibit_ = 1 << 31;
-static const uint _Ebit_ = 1 << 30;
-static const uint _Mbit_ = 1 << 29;
-static const uint _Dbit_ = 1 << 28;
-static const uint _Tbit_ = 1 << 27;
+static const uint _Ibit_ = 1u << 31;
+static const uint _Ebit_ = 1u << 30;
+static const uint _Mbit_ = 1u << 29;
+static const uint _Dbit_ = 1u << 28;
+static const uint _Tbit_ = 1u << 27;
 
 static const uint divI = 0x1040000;
 static const uint divD = 0x2080000;
@@ -361,5 +361,5 @@ static constexpr bool doWholeProgCompare = false;
 // Most blocks do not read status flags, so this is a big speedup.
 
 extern void mVUmergeRegs(const xmm& dest, const xmm& src, int xyzw, bool modXYZW = false);
-extern void mVUsaveReg(const xmm& reg, xAddressVoid ptr, int xyzw, bool modXYZW);
-extern void mVUloadReg(const xmm& reg, xAddressVoid ptr, int xyzw);
+extern void mVUsaveReg(const xmm& reg, xAddressVoid mptr, int xyzw, bool modXYZW);
+extern void mVUloadReg(const xmm& reg, xAddressVoid mptr, int xyzw);

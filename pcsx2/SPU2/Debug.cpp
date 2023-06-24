@@ -387,35 +387,35 @@ void SPU2::WriteRegLog(const char* action, u32 rmem, u16 value)
 		switch (mem)
 		{
 			case SPDIF_OUT:
-				RegLog(2, "SPDIF_OUT", rmem, -1, value);
+				RegLog(2, "SPDIF_OUT", rmem, static_cast<u32>(-1), value);
 				break;
 			case SPDIF_IRQINFO:
-				RegLog(2, "SPDIF_IRQINFO", rmem, -1, value);
+				RegLog(2, "SPDIF_IRQINFO", rmem, static_cast<u32>(-1), value);
 				break;
 			case 0x7c4:
 				if (Spdif.Unknown1 != value && SPU2::MsgToConsole())
 					SPU2::ConLog("* SPU2: SPDIF Unknown Register 1 set to %04x\n", value);
-				RegLog(2, "SPDIF_UNKNOWN1", rmem, -1, value);
+				RegLog(2, "SPDIF_UNKNOWN1", rmem, static_cast<u32>(-1), value);
 				break;
 			case SPDIF_MODE:
 				if (Spdif.Mode != value && SPU2::MsgToConsole())
 					SPU2::ConLog("* SPU2: SPDIF Mode set to %04x\n", value);
-				RegLog(2, "SPDIF_MODE", rmem, -1, value);
+				RegLog(2, "SPDIF_MODE", rmem, static_cast<u32>(-1), value);
 				break;
 			case SPDIF_MEDIA:
 				if (Spdif.Media != value && SPU2::MsgToConsole())
 					SPU2::ConLog("* SPU2: SPDIF Media set to %04x\n", value);
-				RegLog(2, "SPDIF_MEDIA", rmem, -1, value);
+				RegLog(2, "SPDIF_MEDIA", rmem, static_cast<u32>(-1), value);
 				break;
 			case 0x7ca:
 				if (Spdif.Unknown2 != value && SPU2::MsgToConsole())
 					SPU2::ConLog("* SPU2: SPDIF Unknown Register 2 set to %04x\n", value);
-				RegLog(2, "SPDIF_UNKNOWN2", rmem, -1, value);
+				RegLog(2, "SPDIF_UNKNOWN2", rmem, static_cast<u32>(-1), value);
 				break;
 			case SPDIF_PROTECT:
 				if (Spdif.Protection != value && SPU2::MsgToConsole())
 					SPU2::ConLog("* SPU2: SPDIF Copy set to %04x\n", value);
-				RegLog(2, "SPDIF_PROTECT", rmem, -1, value);
+				RegLog(2, "SPDIF_PROTECT", rmem, static_cast<u32>(-1), value);
 				break;
 		}
 		UpdateSpdifMode();

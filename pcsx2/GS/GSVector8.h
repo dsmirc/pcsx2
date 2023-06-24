@@ -40,7 +40,6 @@ public:
 	{
 		struct { float x0, y0, z0, w0, x1, y1, z1, w1; };
 		struct { float r0, g0, b0, a0, r1, g1, b1, a1; };
-		float v[8];
 		float F32[8];
 		double F64[4];
 		s8  I8[32];
@@ -195,14 +194,14 @@ public:
 #endif
 	}
 
-	__forceinline void operator=(__m128 m)
+	__forceinline void operator=(__m128 m_)
 	{
-		this->m = _mm256_insertf128_ps(_mm256_castps128_ps256(m), m, 1);
+		m = _mm256_insertf128_ps(_mm256_castps128_ps256(m_), m_, 1);
 	}
 
-	__forceinline void operator=(__m256 m)
+	__forceinline void operator=(__m256 m_)
 	{
-		this->m = m;
+		m = m_;
 	}
 
 	__forceinline operator __m256() const
@@ -277,37 +276,37 @@ public:
 	{
 		// NOTE: see GSVector4::log2
 
-		GSVector8 one = m_one;
+		const GSVector8 one = m_one;
 
-		GSVector8i i = GSVector8i::cast(*this);
+		const GSVector8i i = GSVector8i::cast(*this);
 
-		GSVector8 e = GSVector8(((i << 1) >> 24) - GSVector8i::x0000007f());
-		GSVector8 m = GSVector8::cast((i << 9) >> 9) | one;
+		const GSVector8 expo = GSVector8(((i << 1) >> 24) - GSVector8i::x0000007f());
+		const GSVector8 mant = GSVector8::cast((i << 9) >> 9) | one;
 
 		GSVector8 p;
 
 		switch (precision)
 		{
 			case 3:
-				p = LOG8_POLY2(m, 2.28330284476918490682f, -1.04913055217340124191f, 0.204446009836232697516f);
+				p = LOG8_POLY2(mant, 2.28330284476918490682f, -1.04913055217340124191f, 0.204446009836232697516f);
 				break;
 			case 4:
-				p = LOG8_POLY3(m, 2.61761038894603480148f, -1.75647175389045657003f, 0.688243882994381274313f, -0.107254423828329604454f);
+				p = LOG8_POLY3(mant, 2.61761038894603480148f, -1.75647175389045657003f, 0.688243882994381274313f, -0.107254423828329604454f);
 				break;
 			default:
 			case 5:
-				p = LOG8_POLY4(m, 2.8882704548164776201f, -2.52074962577807006663f, 1.48116647521213171641f, -0.465725644288844778798f, 0.0596515482674574969533f);
+				p = LOG8_POLY4(mant, 2.8882704548164776201f, -2.52074962577807006663f, 1.48116647521213171641f, -0.465725644288844778798f, 0.0596515482674574969533f);
 				break;
 			case 6:
-				p = LOG8_POLY5(m, 3.1157899f, -3.3241990f, 2.5988452f, -1.2315303f, 3.1821337e-1f, -3.4436006e-2f);
+				p = LOG8_POLY5(mant, 3.1157899f, -3.3241990f, 2.5988452f, -1.2315303f, 3.1821337e-1f, -3.4436006e-2f);
 				break;
 		}
 
 		// This effectively increases the polynomial degree by one, but ensures that log2(1) == 0
 
-		p = p * (m - one);
+		p = p * (mant - one);
 
-		return p + e;
+		return p + expo;
 	}
 
 #endif
@@ -501,7 +500,7 @@ public:
 	{
 		// TODO: use blendps when src == dst
 
-		ASSERT(src < 4 && dst < 4); // not cross lane like extract32()
+		static_assert(src < 4 && dst < 4); // not cross lane like extract32()
 
 		switch (dst)
 		{
@@ -555,7 +554,7 @@ public:
 	template <int i>
 	__forceinline int extract32() const
 	{
-		ASSERT(i < 8);
+		static_assert(i < 8);
 
 		return extract<i / 4>().template extract32<i & 3>();
 	}
@@ -563,7 +562,7 @@ public:
 	template <int i>
 	__forceinline GSVector8 insert(__m128 m) const
 	{
-		ASSERT(i < 2);
+		static_assert(i < 2);
 
 		return GSVector8(_mm256_insertf128_ps(this->m, m, i));
 	}
@@ -571,12 +570,12 @@ public:
 	template <int i>
 	__forceinline GSVector4 extract() const
 	{
-		ASSERT(i < 2);
+		static_assert(i < 2);
 
-		if (i == 0)
+		if constexpr (i == 0)
 			return GSVector4(_mm256_castps256_ps128(m));
-
-		return GSVector4(_mm256_extractf128_ps(m, i));
+		else
+			return GSVector4(_mm256_extractf128_ps(m, i));
 	}
 
 	__forceinline static GSVector8 zero()

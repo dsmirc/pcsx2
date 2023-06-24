@@ -500,7 +500,7 @@ vifOp(vifCode_MSCNT)
 			return 0;
 		}
 
-		vuExecMicro(idx, -1, false);
+		vuExecMicro(idx, static_cast<u32>(-1), false);
 		vifX.cmd = 0;
 		vifX.pass = 0;
 		if (GetVifX.vifpacketsize > 1)

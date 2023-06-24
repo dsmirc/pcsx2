@@ -229,11 +229,11 @@ void PerformanceMetrics::Update(bool gs_register_write, bool fb_blit, bool is_sk
 
 	for (GSSWThreadStats& thread : s_gs_sw_threads)
 	{
-		const u64 time = thread.handle.GetCPUTime();
-		const u64 delta = time - thread.last_cpu_time;
-		thread.last_cpu_time = time;
-		thread.usage = static_cast<double>(delta) * pct_divider;
-		thread.time = static_cast<double>(delta) * time_divider;
+		const u64 sw_cpu_time = thread.handle.GetCPUTime();
+		const u64 sw_delta = sw_cpu_time - thread.last_cpu_time;
+		thread.last_cpu_time = sw_cpu_time;
+		thread.usage = static_cast<double>(sw_delta) * pct_divider;
+		thread.time = static_cast<double>(sw_delta) * time_divider;
 	}
 
 	s_frames_since_last_update = 0;

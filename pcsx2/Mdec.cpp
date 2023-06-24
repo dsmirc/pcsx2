@@ -310,12 +310,12 @@ static int aanscales[DCTSIZE2] = {
 	   4520,  6270,  5906,  5315,  4520,  3552,  2446,  1247
 };
 
-void iqtab_init(int *iqtab,unsigned char *iq_y)
+void iqtab_init(int *iqtab,unsigned char *iq_y_)
 {
 	int i;
 
 	for(i=0;i<DCTSIZE2;i++) {
-		iqtab[i] =iq_y[i] *aanscales[zscan[i]]>>(CONST_BITS14-IFAST_SCALE_BITS);
+		iqtab[i] = iq_y_[i] *aanscales[zscan[i]]>>(CONST_BITS14-IFAST_SCALE_BITS);
 	}
 }
 

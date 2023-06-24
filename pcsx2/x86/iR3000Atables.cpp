@@ -487,6 +487,8 @@ static void rpsxLogicalOp_constv(LogicalOp op, int info, int creg, u32 vreg, int
 			break;
 		case LogicalOp::XOR:
 			hasFixed = false;
+			fixedInput = 0;
+			fixedOutput = 0;
 			identityInput = 0;
 			break;
 		case LogicalOp::NOR:
@@ -495,7 +497,8 @@ static void rpsxLogicalOp_constv(LogicalOp op, int info, int creg, u32 vreg, int
 			identityInput = 0;
 			break;
 		default:
-			pxAssert(0);
+			pxFailRel("Unhandled op");
+			return;
 	}
 
 	const s32 cval = static_cast<s32>(g_psxConstRegs[creg]);
@@ -927,7 +930,7 @@ static void rpsxDIVsuper(int info, int sign, int process = 0)
 	else
 		xMOV(eax, ptr32[&psxRegs.GPR.r[_Rs_]]);
 
-	u8* end1;
+	u8* end1 = nullptr;
 	if (sign) //test for overflow (x86 will just throw an exception)
 	{
 		xCMP(eax, 0x80000000);
@@ -1217,11 +1220,11 @@ static void rpsxSH()
 
 static void rpsxSW()
 {
-	u8* ptr = rpsxGetConstantAddressOperand(true);
-	if (ptr)
+	u8* memptr = rpsxGetConstantAddressOperand(true);
+	if (memptr)
 	{
 		const int rt = _allocX86reg(X86TYPE_PSX, _Rt_, MODE_READ);
-		xMOV(ptr32[ptr], xRegister32(rt));
+		xMOV(ptr32[memptr], xRegister32(rt));
 		return;
 	}
 

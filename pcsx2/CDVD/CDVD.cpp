@@ -553,7 +553,7 @@ static std::string ExecutablePathToSerial(const std::string& path)
 	}
 
 	// SCES_123.45 -> SCES-12345
-	for (std::string::size_type pos = 0; pos < serial.size();)
+	for (pos = 0; pos < serial.size();)
 	{
 		if (serial[pos] == '.')
 		{
@@ -1726,7 +1726,7 @@ u8 cdvdRead(u8 key)
 			// return -1 (all bits set) instead of 0, improves chances of the software being happy
 			PSXHW_LOG("*Unknown 8bit read at address 0x1f4020%x", key);
 			Console.Error("IOP Unknown 8bit read from addr 0x1f4020%x", key);
-			return -1;
+			return static_cast<u8>(-1);
 	}
 }
 
@@ -1878,7 +1878,7 @@ static void cdvdWrite04(u8 rt)
 			cdvd.SeekToSector = *(u32*)(cdvd.NCMDParam + 0);
 			cdvd.nSectors = *(u32*)(cdvd.NCMDParam + 4);
 			cdvd.RetryCnt = (cdvd.NCMDParam[8] == 0) ? 0x100 : cdvd.NCMDParam[8];
-			u32 oldSpindleCtrl = cdvd.SpindlCtrl;
+			const int oldSpindleCtrl = cdvd.SpindlCtrl;
 
 			if (cdvd.NCMDParam[9] & 0x3F)
 				cdvd.SpindlCtrl = cdvd.NCMDParam[9];
@@ -2016,7 +2016,7 @@ static void cdvdWrite04(u8 rt)
 			cdvd.nSectors = *(u32*)(cdvd.NCMDParam + 4);
 			cdvd.RetryCnt = (cdvd.NCMDParam[8] == 0) ? 0x100 : cdvd.NCMDParam[8];
 
-			u32 oldSpindleCtrl = cdvd.SpindlCtrl;
+			const int oldSpindleCtrl = cdvd.SpindlCtrl;
 
 			if (cdvd.NCMDParam[9] & 0x3F)
 				cdvd.SpindlCtrl = cdvd.NCMDParam[9];
@@ -2120,7 +2120,7 @@ static void cdvdWrite04(u8 rt)
 			cdvd.SeekToSector = *(u32*)(cdvd.NCMDParam + 0);
 			cdvd.nSectors = *(u32*)(cdvd.NCMDParam + 4);
 
-			u32 oldSpindleCtrl = cdvd.SpindlCtrl;
+			const int oldSpindleCtrl = cdvd.SpindlCtrl;
 
 			if (cdvd.NCMDParam[8] == 0)
 				cdvd.RetryCnt = 0x100;

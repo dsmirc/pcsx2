@@ -208,7 +208,6 @@ static bool QuickDmaExec( void (*func)(), u32 mem)
 
 
 static tDMAC_QUEUE QueuedDMA(0);
-static u32 oldvalue = 0;
 
 static void StartQueuedDMA()
 {
@@ -560,7 +559,7 @@ __fi bool dmacWrite32( u32 mem, mem32_t& value )
 		case (DMAC_ENABLEW):
 		{
 			HW_LOG("DMAC_ENABLEW Write 32bit %lx", value);
-			oldvalue = psHu8(DMAC_ENABLEW + 2);
+			const u32 oldvalue = psHu8(DMAC_ENABLEW + 2);
 			psHu32(DMAC_ENABLEW) = value;
 			psHu32(DMAC_ENABLER) = value;
 			if (((oldvalue & 0x1) == 1) && (((value >> 16) & 0x1) == 0))
@@ -572,9 +571,6 @@ __fi bool dmacWrite32( u32 mem, mem32_t& value )
 		default:
 			return true;
 	}
-
-	// fall-through: use the default writeback provided by caller.
-	return true;
 }
 
 template u32 dmacRead32<0x03>( u32 mem );

@@ -706,7 +706,7 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 		const bool internal_resolution = (GSConfig.ScreenshotSize >= GSScreenshotSize::InternalResolution);
 		const bool aspect_correct = (GSConfig.ScreenshotSize != GSScreenshotSize::InternalResolutionUncorrected);
 
-		if (g_gs_device->GetCurrent() && SaveSnapshotToMemory(
+		if (current && SaveSnapshotToMemory(
 			internal_resolution ? 0 : g_gs_device->GetWindowWidth(),
 			internal_resolution ? 0 : g_gs_device->GetWindowHeight(),
 			aspect_correct, true,
@@ -740,27 +740,24 @@ void GSRenderer::VSync(u32 field, bool registers_written, bool idle_frame)
 	}
 
 	// capture
-	if (GSCapture::IsCapturingVideo())
+	if (GSCapture::IsCapturingVideo() && current)
 	{
-		if (GSTexture* current = g_gs_device->GetCurrent())
-		{
-			const GSVector2i size(GSCapture::GetSize());
+		const GSVector2i size = GSCapture::GetSize();
 
-			// TODO: Maybe avoid this copy in the future? We can use swscale to fix it up on the dumping thread..
-			if (current->GetSize() != size)
+		// TODO: Maybe avoid this copy in the future? We can use swscale to fix it up on the dumping thread..
+		if (current->GetSize() != size)
+		{
+			GSTexture* temp = g_gs_device->CreateRenderTarget(size.x, size.y, GSTexture::Format::Color, false);
+			if (temp)
 			{
-				GSTexture* temp = g_gs_device->CreateRenderTarget(size.x, size.y, GSTexture::Format::Color, false);
-				if (temp)
-				{
-					g_gs_device->StretchRect(current, temp, GSVector4(0, 0, size.x, size.y));
-					GSCapture::DeliverVideoFrame(temp);
-					g_gs_device->Recycle(temp);
-				}
+				g_gs_device->StretchRect(current, temp, GSVector4(0, 0, size.x, size.y));
+				GSCapture::DeliverVideoFrame(temp);
+				g_gs_device->Recycle(temp);
 			}
-			else
-			{
-				GSCapture::DeliverVideoFrame(current);
-			}
+		}
+		else
+		{
+			GSCapture::DeliverVideoFrame(current);
 		}
 	}
 }

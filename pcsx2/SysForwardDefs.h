@@ -42,4 +42,4 @@
 #define PCSX2_LICENSE_URL "https://github.com/PCSX2/pcsx2/blob/master/pcsx2/Docs/License.txt"
 #define PCSX2_DISCORD_URL "https://discord.com/invite/TCz3t9k"
 
-static const bool PCSX2_isReleaseVersion = 0;
+static constexpr bool PCSX2_isReleaseVersion = false;

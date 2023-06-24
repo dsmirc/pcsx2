@@ -56,8 +56,8 @@ REC_FUNC_DEL(PSLLW, _Rd_);
 
 void recPLZCW()
 {
-	int x86regs = -1;
-	int xmmregs = -1;
+	int gprs = -1;
+	int smms = -1;
 
 	if (!_Rd_)
 		return;
@@ -81,13 +81,13 @@ void recPLZCW()
 
 	_eeOnWriteReg(_Rd_, 0);
 
-	if ((xmmregs = _checkXMMreg(XMMTYPE_GPRREG, _Rs_, MODE_READ)) >= 0)
+	if ((smms = _checkXMMreg(XMMTYPE_GPRREG, _Rs_, MODE_READ)) >= 0)
 	{
-		xMOVD(eax, xRegisterSSE(xmmregs));
+		xMOVD(eax, xRegisterSSE(smms));
 	}
-	else if ((x86regs = _checkX86reg(X86TYPE_GPR, _Rs_, MODE_READ)) >= 0)
+	else if ((gprs = _checkX86reg(X86TYPE_GPR, _Rs_, MODE_READ)) >= 0)
 	{
-		xMOV(eax, xRegister32(x86regs));
+		xMOV(eax, xRegister32(gprs));
 	}
 	else
 	{
@@ -122,13 +122,13 @@ void recPLZCW()
 
 	// second word
 
-	if (xmmregs >= 0)
+	if (smms >= 0)
 	{
-		xPEXTR.D(eax, xRegisterSSE(xmmregs), 1);
+		xPEXTR.D(eax, xRegisterSSE(smms), 1);
 	}
-	else if (x86regs >= 0)
+	else if (gprs >= 0)
 	{
-		xMOV(rax, xRegister64(x86regs));
+		xMOV(rax, xRegister64(gprs));
 		xSHR(rax, 32);
 	}
 	else

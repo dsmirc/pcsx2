@@ -377,19 +377,19 @@ bool MipsCheckImmediate(const char* Source, DebugInterface* cpu, int& dest, int&
 	return true;
 }
 
-CMipsInstruction::CMipsInstruction(DebugInterface* cpu) :
+CMipsInstruction::CMipsInstruction(DebugInterface* cpu_) :
 	Opcode(), NoCheckError(false), Loaded(false), RamPos(0),
 	registers(), immediateType(MIPS_NOIMMEDIATE), immediate(),
 	vfpuSize(0), encoding(0), error()
 {
-	this->cpu = cpu;
+	cpu = cpu_;
 }
 
-bool CMipsInstruction::Load(const char* Name, const char* Params, int RamPos)
+bool CMipsInstruction::Load(const char* Name, const char* Params, int RamPos_)
 {
 	bool paramfail = false;
 	NoCheckError = false;
-	this->RamPos = RamPos;
+	RamPos = RamPos_;
 
 	const MipsArchDefinition& arch = mipsArchs[MARCH_PS2];
 	for (int z = 0; MipsOpcodes[z].name != NULL; z++)

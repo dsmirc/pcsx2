@@ -51,7 +51,7 @@ public:
 	{
 		struct { T x, y; };
 		struct { T r, g; };
-		struct { T v[2]; };
+		struct { T V[2]; };
 	};
 
 	GSVector2T() = default;

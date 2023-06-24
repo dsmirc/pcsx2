@@ -41,13 +41,13 @@ static bool shouldUseCDrawScanline(u64 key)
 		{
 			for (std::string str; std::getline(file, str);)
 			{
-				u64 key;
+				u64 file_key;
 				char yn;
-				if (sscanf(str.c_str(), "%llx %c", &key, &yn) == 2)
+				if (sscanf(str.c_str(), "%llx %c", &file_key, &yn) == 2)
 				{
 					if (yn != 'Y' && yn != 'N' && yn != 'y' && yn != 'n')
 						Console.Warning("Failed to parse %s: Not y/n", str.c_str());
-					s_use_c_draw_scanline[key] = (yn == 'Y' || yn == 'y') ? true : false;
+					s_use_c_draw_scanline[file_key] = (yn == 'Y' || yn == 'y') ? true : false;
 				}
 				else
 				{

@@ -126,12 +126,9 @@ s32 PADfreeze(FreezeAction mode, freezeData* data)
 		{
 			for (int slot = 0; slot < 4; slot++)
 			{
-				u8 mode = pdata->padData[port][slot].mode;
-
-				if (mode != MODE_DIGITAL && mode != MODE_ANALOG && mode != MODE_DS2_NATIVE)
-				{
+				const u8 pad_mode = pdata->padData[port][slot].mode;
+				if (pad_mode != MODE_DIGITAL && pad_mode != MODE_ANALOG && pad_mode != MODE_DS2_NATIVE)
 					break;
-				}
 
 				memcpy(&pads[port][slot], &pdata->padData[port][slot], sizeof(PadFreezeData));
 			}
@@ -274,10 +271,10 @@ void PAD::SetDefaultControllerConfig(SettingsInterface& si)
 	si.SetFloatValue("Pad", "PointerInertia", 10.0f);
 
 	// PCSX2 Controller Settings - Default pad types and parameters.
-	for (u32 i = 0; i < NUM_CONTROLLER_PORTS; i++)
+	for (u32 port = 0; port < NUM_CONTROLLER_PORTS; port++)
 	{
-		const char* type = GetDefaultPadType(i);
-		const std::string section(GetConfigSection(i));
+		const char* type = GetDefaultPadType(port);
+		const std::string section(GetConfigSection(port));
 		si.ClearSection(section.c_str());
 		si.SetStringValue(section.c_str(), "Type", type);
 

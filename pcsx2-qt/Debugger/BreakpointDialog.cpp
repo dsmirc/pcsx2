@@ -104,7 +104,7 @@ void BreakpointDialog::accept()
 	{
 		PostfixExpression expr;
 
-		u64 address;
+		u64 address = 0;
 		if (!m_cpu->initExpression(m_ui.txtAddress->text().toLocal8Bit().constData(), expr) ||
 			!m_cpu->parseExpression(expr, address))
 		{
@@ -136,7 +136,7 @@ void BreakpointDialog::accept()
 	{
 		PostfixExpression expr;
 
-		u64 startAddress;
+		u64 startAddress = 0;
 		if (!m_cpu->initExpression(m_ui.txtAddress->text().toLocal8Bit().constData(), expr) ||
 			!m_cpu->parseExpression(expr, startAddress))
 		{
@@ -144,7 +144,7 @@ void BreakpointDialog::accept()
 			return;
 		}
 
-		u64 size;
+		u64 size = 0;
 		if (!m_cpu->initExpression(m_ui.txtSize->text().toLocal8Bit(), expr) ||
 			!m_cpu->parseExpression(expr, size) || !size)
 		{

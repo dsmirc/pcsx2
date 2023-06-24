@@ -218,16 +218,18 @@ namespace StringUtil
 	std::string toLower(const std::string_view& input)
 	{
 		std::string newStr;
+		newStr.reserve(input.size());
 		std::transform(input.begin(), input.end(), std::back_inserter(newStr),
-			[](unsigned char c) { return std::tolower(c); });
+			[](char c) { return static_cast<char>(std::tolower(c)); });
 		return newStr;
 	}
 
 	std::string toUpper(const std::string_view& input)
 	{
 		std::string newStr;
+		newStr.reserve(input.size());
 		std::transform(input.begin(), input.end(), std::back_inserter(newStr),
-			[](unsigned char c) { return std::toupper(c); });
+			[](char c) { return static_cast<char>(std::toupper(c)); });
 		return newStr;
 	}
 

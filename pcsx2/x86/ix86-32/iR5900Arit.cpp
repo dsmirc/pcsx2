@@ -447,6 +447,8 @@ static void recLogicalOp_constv(LogicalOp op, int info, int creg, u32 vreg, int 
 			break;
 		case LogicalOp::XOR:
 			hasFixed = false;
+			fixedInput = 0;
+			fixedOutput = 0;
 			identityInput = 0;
 			break;
 		case LogicalOp::NOR:
@@ -455,7 +457,8 @@ static void recLogicalOp_constv(LogicalOp op, int info, int creg, u32 vreg, int 
 			identityInput = 0;
 			break;
 		default:
-			pxAssert(0);
+			pxFailRel("Unhandled op");
+			return;
 	}
 
 	GPR_reg64 cval = g_cpuConstRegs[creg];

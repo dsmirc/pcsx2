@@ -32,88 +32,88 @@ void mVUunpack_xyzw(const xmm& dstreg, const xmm& srcreg, int xyzw)
 	}
 }
 
-void mVUloadReg(const xmm& reg, xAddressVoid ptr, int xyzw)
+void mVUloadReg(const xmm& reg, xAddressVoid valptr, int xyzw)
 {
 	switch (xyzw)
 	{
-		case 8:  xMOVSSZX(reg, ptr32[ptr     ]); break; // X
-		case 4:  xMOVSSZX(reg, ptr32[ptr +  4]); break; // Y
-		case 2:  xMOVSSZX(reg, ptr32[ptr +  8]); break; // Z
-		case 1:  xMOVSSZX(reg, ptr32[ptr + 12]); break; // W
-		default: xMOVAPS (reg, ptr128[ptr]);     break;
+		case 8:  xMOVSSZX(reg, ptr32[valptr     ]); break; // X
+		case 4:  xMOVSSZX(reg, ptr32[valptr +  4]); break; // Y
+		case 2:  xMOVSSZX(reg, ptr32[valptr +  8]); break; // Z
+		case 1:  xMOVSSZX(reg, ptr32[valptr + 12]); break; // W
+		default: xMOVAPS (reg, ptr128[valptr]);     break;
 	}
 }
 
-void mVUloadIreg(const xmm& reg, int xyzw, VURegs* vuRegs)
+void mVUloadIreg(const xmm& reg, int xyzw, VURegs* regs)
 {
-	xMOVSSZX(reg, ptr32[&vuRegs->VI[REG_I].UL]);
+	xMOVSSZX(reg, ptr32[&regs->VI[REG_I].UL]);
 	if (!_XYZWss(xyzw))
 		xSHUF.PS(reg, reg, 0);
 }
 
 // Modifies the Source Reg!
-void mVUsaveReg(const xmm& reg, xAddressVoid ptr, int xyzw, bool modXYZW)
+void mVUsaveReg(const xmm& reg, xAddressVoid mptr, int xyzw, bool modXYZW)
 {
 	switch (xyzw)
 	{
 		case 5: // YW
-			xEXTRACTPS(ptr32[ptr + 4], reg, 1);
-			xEXTRACTPS(ptr32[ptr + 12], reg, 3);
+			xEXTRACTPS(ptr32[mptr + 4], reg, 1);
+			xEXTRACTPS(ptr32[mptr + 12], reg, 3);
 			break;
 		case 6: // YZ
 			xPSHUF.D(reg, reg, 0xc9);
-			xMOVL.PS(ptr64[ptr + 4], reg);
+			xMOVL.PS(ptr64[mptr + 4], reg);
 			break;
 		case 7: // YZW
-			xMOVH.PS(ptr64[ptr + 8], reg);
-			xEXTRACTPS(ptr32[ptr + 4], reg, 1);
+			xMOVH.PS(ptr64[mptr + 8], reg);
+			xEXTRACTPS(ptr32[mptr + 4], reg, 1);
 			break;
 		case 9: // XW
-			xMOVSS(ptr32[ptr], reg);
-			xEXTRACTPS(ptr32[ptr + 12], reg, 3);
+			xMOVSS(ptr32[mptr], reg);
+			xEXTRACTPS(ptr32[mptr + 12], reg, 3);
 			break;
 		case 10: // XZ
-			xMOVSS(ptr32[ptr], reg);
-			xEXTRACTPS(ptr32[ptr + 8], reg, 2);
+			xMOVSS(ptr32[mptr], reg);
+			xEXTRACTPS(ptr32[mptr + 8], reg, 2);
 			break;
 		case 11: // XZW
-			xMOVSS(ptr32[ptr], reg);
-			xMOVH.PS(ptr64[ptr + 8], reg);
+			xMOVSS(ptr32[mptr], reg);
+			xMOVH.PS(ptr64[mptr + 8], reg);
 			break;
 		case 13: // XYW
-			xMOVL.PS(ptr64[ptr], reg);
-			xEXTRACTPS(ptr32[ptr + 12], reg, 3);
+			xMOVL.PS(ptr64[mptr], reg);
+			xEXTRACTPS(ptr32[mptr + 12], reg, 3);
 			break;
 		case 14: // XYZ
-			xMOVL.PS(ptr64[ptr], reg);
-			xEXTRACTPS(ptr32[ptr + 8], reg, 2);
+			xMOVL.PS(ptr64[mptr], reg);
+			xEXTRACTPS(ptr32[mptr + 8], reg, 2);
 			break;
 		case 4: // Y
 			if (!modXYZW)
 				mVUunpack_xyzw(reg, reg, 1);
-			xMOVSS(ptr32[ptr + 4], reg);
+			xMOVSS(ptr32[mptr + 4], reg);
 			break;
 		case 2: // Z
 			if (!modXYZW)
 				mVUunpack_xyzw(reg, reg, 2);
-			xMOVSS(ptr32[ptr + 8], reg);
+			xMOVSS(ptr32[mptr + 8], reg);
 			break;
 		case 1: // W
 			if (!modXYZW)
 				mVUunpack_xyzw(reg, reg, 3);
-			xMOVSS(ptr32[ptr + 12], reg);
+			xMOVSS(ptr32[mptr + 12], reg);
 			break;
 		case 8: // X
-			xMOVSS(ptr32[ptr], reg);
+			xMOVSS(ptr32[mptr], reg);
 			break;
 		case 12: // XY
-			xMOVL.PS(ptr64[ptr], reg);
+			xMOVL.PS(ptr64[mptr], reg);
 			break;
 		case 3: // ZW
-			xMOVH.PS(ptr64[ptr + 8], reg);
+			xMOVH.PS(ptr64[mptr + 8], reg);
 			break;
 		default: // XYZW
-			xMOVAPS(ptr128[ptr], reg);
+			xMOVAPS(ptr128[mptr], reg);
 			break;
 	}
 }

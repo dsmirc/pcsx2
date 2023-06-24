@@ -112,8 +112,8 @@ void cdvdCacheReset()
 
 bool cdvdReadBlockOfSectors(u32 sector, u8* data)
 {
-	u32 count = std::min(sectors_per_read, src->GetSectorCount() - sector);
-	const s32 media = src->GetMediaType();
+	u32 count = std::min(sectors_per_read, g_ioctl_src->GetSectorCount() - sector);
+	const s32 media = g_ioctl_src->GetMediaType();
 
 	// TODO: Is it really necessary to retry if it fails? I'm not sure the
 	// second time is really going to be any better.
@@ -121,12 +121,12 @@ bool cdvdReadBlockOfSectors(u32 sector, u8* data)
 	{
 		if (media >= 0)
 		{
-			if (src->ReadSectors2048(sector, count, data))
+			if (g_ioctl_src->ReadSectors2048(sector, count, data))
 				return true;
 		}
 		else
 		{
-			if (src->ReadSectors2352(sector, count, data))
+			if (g_ioctl_src->ReadSectors2352(sector, count, data))
 				return true;
 		}
 	}
@@ -142,7 +142,7 @@ void cdvdCallNewDiscCB()
 
 bool cdvdUpdateDiscStatus()
 {
-	bool ready = src->DiscReady();
+	bool ready = g_ioctl_src->DiscReady();
 
 	if (!ready)
 	{
@@ -202,7 +202,7 @@ void cdvdThread()
 
 		// Read request
 		bool handling_request = false;
-		u32 request_lsn;
+		u32 request_lsn = 0;
 
 		{
 			std::lock_guard<std::mutex> request_guard(s_request_lock);
@@ -247,14 +247,14 @@ void cdvdThread()
 
 		// Prefetch
 		u32 next_prefetch_lsn = g_last_sector_block_lsn + sectors_per_read;
-		if (next_prefetch_lsn >= src->GetSectorCount())
+		if (next_prefetch_lsn >= g_ioctl_src->GetSectorCount())
 		{
 			prefetches_left = 0;
 		}
 		else
 		{
 			const u32 max_prefetches = 16;
-			u32 remaining = src->GetSectorCount() - next_prefetch_lsn;
+			u32 remaining = g_ioctl_src->GetSectorCount() - next_prefetch_lsn;
 			prefetches_left = std::min((remaining + sectors_per_read - 1) / sectors_per_read, max_prefetches);
 		}
 	}
@@ -292,7 +292,7 @@ void cdvdStopThread()
 
 void cdvdRequestSector(u32 sector, s32 mode)
 {
-	if (sector >= src->GetSectorCount())
+	if (sector >= g_ioctl_src->GetSectorCount())
 		return;
 
 	// Align to cache block
@@ -320,7 +320,7 @@ u8* cdvdGetSector(u32 sector, s32 mode)
 		if (cdvdReadBlockOfSectors(sector_block, buffer))
 			cdvdCacheUpdate(sector_block, buffer);
 
-	if (src->GetMediaType() >= 0)
+	if (g_ioctl_src->GetMediaType() >= 0)
 	{
 		u32 offset = 2048 * (sector - sector_block);
 		return buffer + offset;
@@ -346,12 +346,12 @@ s32 cdvdDirectReadSector(u32 sector, s32 mode, u8* buffer)
 {
 	static u8 data[2352 * sectors_per_read];
 
-	if (src == nullptr)
+	if (g_ioctl_src == nullptr)
 		return -1;
 
 	try
 	{
-		if (sector >= src->GetSectorCount())
+		if (sector >= g_ioctl_src->GetSectorCount())
 			return -1;
 	}
 	catch (...)
@@ -368,7 +368,7 @@ s32 cdvdDirectReadSector(u32 sector, s32 mode, u8* buffer)
 			cdvdCacheUpdate(sector_block, data);
 	}
 
-	if (src->GetMediaType() >= 0)
+	if (g_ioctl_src->GetMediaType() >= 0)
 	{
 		u32 offset = 2048 * (sector - sector_block);
 		memcpy(buffer, data + offset, 2048);
@@ -398,7 +398,7 @@ s32 cdvdDirectReadSector(u32 sector, s32 mode, u8* buffer)
 
 s32 cdvdGetMediaType()
 {
-	return src->GetMediaType();
+	return g_ioctl_src->GetMediaType();
 }
 
 s32 cdvdRefreshData()

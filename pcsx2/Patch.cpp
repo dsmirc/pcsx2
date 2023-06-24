@@ -291,7 +291,7 @@ bool Patch::OpenPatchesZip()
 
 	zip_error ze = {};
 	zip_source_t* zs = zip_source_file_create(filename.c_str(), 0, 0, &ze);
-	if (zs && !(s_patches_zip = zip_open_from_source(zs, ZIP_RDONLY, &ze)))
+	if (zs && (s_patches_zip = zip_open_from_source(zs, ZIP_RDONLY, &ze)) == nullptr)
 	{
 		static bool warning_shown = false;
 		if (!warning_shown)

@@ -296,7 +296,7 @@ namespace InternalServers
 		if (ret == WSA_IO_PENDING)
 			return;
 		else
-			GetAddrInfoExCallback(ret, -1, &data->overlapped);
+			GetAddrInfoExCallback(ret, static_cast<DWORD>(-1), &data->overlapped);
 	}
 
 	void __stdcall DNS_Server::GetAddrInfoExCallback(DWORD dwError, DWORD dwBytes, OVERLAPPED* lpOverlapped)

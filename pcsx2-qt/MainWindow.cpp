@@ -2351,11 +2351,11 @@ void MainWindow::populateLoadStateMenu(QMenu* menu, const QString& filename, con
 	}
 
 	const QByteArray game_serial_utf8(serial.toUtf8());
-	std::string state_filename;
-	FILESYSTEM_STAT_DATA sd;
 	if (is_right_click_menu)
 	{
-		state_filename = VMManager::GetSaveStateFileName(game_serial_utf8.constData(), crc, -1);
+		const std::string state_filename = VMManager::GetSaveStateFileName(game_serial_utf8.constData(), crc, -1);
+
+		FILESYSTEM_STAT_DATA sd;
 		if (FileSystem::StatFile(state_filename.c_str(), &sd))
 		{
 			action = menu->addAction(tr("Resume (%2)").arg(formatTimestampForSaveStateMenu(sd.ModificationTime)));
@@ -2369,8 +2369,9 @@ void MainWindow::populateLoadStateMenu(QMenu* menu, const QString& filename, con
 
 	for (s32 i = 1; i <= VMManager::NUM_SAVE_STATE_SLOTS; i++)
 	{
+		const std::string state_filename = VMManager::GetSaveStateFileName(game_serial_utf8.constData(), crc, i);
+
 		FILESYSTEM_STAT_DATA sd;
-		state_filename = VMManager::GetSaveStateFileName(game_serial_utf8.constData(), crc, i);
 		if (!FileSystem::StatFile(state_filename.c_str(), &sd))
 			continue;
 

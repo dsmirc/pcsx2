@@ -295,9 +295,10 @@ _mVUt void mVUcleanUp()
 {
 	microVU& mVU = mVUx;
 
-	mVU.prog.x86ptr = x86Ptr;
+	u8* current_x86ptr = x86Ptr;
+	mVU.prog.x86ptr = current_x86ptr;
 
-	if ((xGetPtr() < mVU.prog.x86start) || (xGetPtr() >= mVU.prog.x86end))
+	if ((current_x86ptr < mVU.prog.x86start) || (current_x86ptr >= mVU.prog.x86end))
 	{
 		Console.WriteLn(vuIndex ? Color_Orange : Color_Magenta, "microVU%d: Program cache limit reached.", mVU.index);
 		mVUreset(mVU, false);

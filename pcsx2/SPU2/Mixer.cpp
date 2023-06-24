@@ -529,19 +529,19 @@ StereoOut32 V_Core::Mix(const VoiceMixSet& inVoices, const StereoOut32& Input, c
 
 
 	// Saturate final result to standard 16 bit range.
-	const VoiceMixSet Voices(clamp_mix(inVoices.Dry), clamp_mix(inVoices.Wet));
+	const VoiceMixSet voices(clamp_mix(inVoices.Dry), clamp_mix(inVoices.Wet));
 
 	// Write Mixed results To Output Area
-	spu2M_WriteFast(((0 == Index) ? 0x1000 : 0x1800) + OutPos, Voices.Dry.Left);
-	spu2M_WriteFast(((0 == Index) ? 0x1200 : 0x1A00) + OutPos, Voices.Dry.Right);
-	spu2M_WriteFast(((0 == Index) ? 0x1400 : 0x1C00) + OutPos, Voices.Wet.Left);
-	spu2M_WriteFast(((0 == Index) ? 0x1600 : 0x1E00) + OutPos, Voices.Wet.Right);
+	spu2M_WriteFast(((0 == Index) ? 0x1000 : 0x1800) + OutPos, voices.Dry.Left);
+	spu2M_WriteFast(((0 == Index) ? 0x1200 : 0x1A00) + OutPos, voices.Dry.Right);
+	spu2M_WriteFast(((0 == Index) ? 0x1400 : 0x1C00) + OutPos, voices.Wet.Left);
+	spu2M_WriteFast(((0 == Index) ? 0x1600 : 0x1E00) + OutPos, voices.Wet.Right);
 
 	// Write mixed results to logfile (if enabled)
 
 #ifdef PCSX2_DEVBUILD
-	WaveDump::WriteCore(Index, CoreSrc_DryVoiceMix, Voices.Dry);
-	WaveDump::WriteCore(Index, CoreSrc_WetVoiceMix, Voices.Wet);
+	WaveDump::WriteCore(Index, CoreSrc_DryVoiceMix, voices.Dry);
+	WaveDump::WriteCore(Index, CoreSrc_WetVoiceMix, voices.Wet);
 #endif
 
 	// Mix in the Input data
@@ -551,8 +551,8 @@ StereoOut32 V_Core::Mix(const VoiceMixSet& inVoices, const StereoOut32& Input, c
 		Input.Right & DryGate.InpR);
 
 	// Mix in the Voice data
-	TD.Left += Voices.Dry.Left & DryGate.SndL;
-	TD.Right += Voices.Dry.Right & DryGate.SndR;
+	TD.Left += voices.Dry.Left & DryGate.SndL;
+	TD.Right += voices.Dry.Right & DryGate.SndR;
 
 	// Mix in the External (nothing/core0) data
 	TD.Left += Ext.Left & DryGate.ExtL;
@@ -591,8 +591,8 @@ StereoOut32 V_Core::Mix(const VoiceMixSet& inVoices, const StereoOut32& Input, c
 	TW.Left = Input.Left & WetGate.InpL;
 	TW.Right = Input.Right & WetGate.InpR;
 
-	TW.Left += Voices.Wet.Left & WetGate.SndL;
-	TW.Right += Voices.Wet.Right & WetGate.SndR;
+	TW.Left += voices.Wet.Left & WetGate.SndL;
+	TW.Right += voices.Wet.Right & WetGate.SndR;
 	TW.Left += Ext.Left & WetGate.ExtL;
 	TW.Right += Ext.Right & WetGate.ExtR;
 

@@ -969,7 +969,7 @@ namespace usb_msd
 		MSDState* s = new MSDState();
 
 		std::string path(USB::GetConfigString(si, port, TypeName(), "ImagePath"));
-		if (path.empty() || !(s->file = FileSystem::OpenCFile(path.c_str(), "r+b")))
+		if (path.empty() || (s->file = FileSystem::OpenCFile(path.c_str(), "r+b")) == nullptr)
 		{
 			Host::AddOSDMessage(fmt::format(TRANSLATE_SV("USB", "usb-msd: Could not open image file '{}'"), path),
 				Host::OSD_ERROR_DURATION);
@@ -982,7 +982,7 @@ namespace usb_msd
 
 		s->file_size = sd.Size;
 		s->f.mtime = sd.ModificationTime;
-		s->f.last_cmd = -1;
+		s->f.last_cmd = static_cast<u8>(-1);
 		s->dev.speed = USB_SPEED_FULL;
 
 		s->desc.full = &s->desc_dev;

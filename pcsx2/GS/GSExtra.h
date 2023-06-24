@@ -24,7 +24,7 @@ template <typename T>
 __forceinline bool BitEqual(const T& a, const T& b)
 {
 #if _M_SSE >= 0x501
-	if (alignof(T) >= 32)
+	if constexpr (alignof(T) >= 32)
 	{
 		GSVector8i eq = GSVector8i::xffffffff();
 		for (size_t i = 0; i < sizeof(T) / 32; i++)
@@ -33,48 +33,51 @@ __forceinline bool BitEqual(const T& a, const T& b)
 	}
 #endif
 	GSVector4i eq = GSVector4i::xffffffff();
-	if (alignof(T) >= 16)
+	if constexpr (alignof(T) >= 16)
 	{
 		for (size_t i = 0; i < sizeof(T) / 16; i++)
 			eq &= reinterpret_cast<const GSVector4i*>(&a)[i].eq8(reinterpret_cast<const GSVector4i*>(&b)[i]);
 		return eq.alltrue();
 	}
-	const char* ac = reinterpret_cast<const char*>(&a);
-	const char* bc = reinterpret_cast<const char*>(&b);
-	size_t i = 0;
-	if (sizeof(T) >= 16)
+	else
 	{
-		for (; i < sizeof(T) - 15; i += 16)
-			eq &= GSVector4i::load<false>(ac + i).eq8(GSVector4i::load<false>(bc + i));
+		const char* ac = reinterpret_cast<const char*>(&a);
+		const char* bc = reinterpret_cast<const char*>(&b);
+		size_t i = 0;
+		if constexpr (sizeof(T) >= 16)
+		{
+			for (; i < sizeof(T) - 15; i += 16)
+				eq &= GSVector4i::load<false>(ac + i).eq8(GSVector4i::load<false>(bc + i));
+		}
+		if (i + 8 <= sizeof(T))
+		{
+			eq &= GSVector4i::loadl(ac + i).eq8(GSVector4i::loadl(bc + i));
+			i += 8;
+		}
+		bool eqb = eq.alltrue();
+		if (i + 4 <= sizeof(T))
+		{
+			u32 ai, bi;
+			memcpy(&ai, ac + i, sizeof(ai));
+			memcpy(&bi, bc + i, sizeof(bi));
+			eqb = ai == bi && eqb;
+			i += 4;
+		}
+		if (i + 2 <= sizeof(T))
+		{
+			u16 as, bs;
+			memcpy(&as, ac + i, sizeof(as));
+			memcpy(&bs, bc + i, sizeof(bs));
+			eqb = as == bs && eqb;
+			i += 2;
+		}
+		if (i != sizeof(T))
+		{
+			ASSERT(i + 1 == sizeof(T));
+			eqb = ac[i] == bc[i] && eqb;
+		}
+		return eqb;
 	}
-	if (i + 8 <= sizeof(T))
-	{
-		eq &= GSVector4i::loadl(ac + i).eq8(GSVector4i::loadl(bc + i));
-		i += 8;
-	}
-	bool eqb = eq.alltrue();
-	if (i + 4 <= sizeof(T))
-	{
-		u32 ai, bi;
-		memcpy(&ai, ac + i, sizeof(ai));
-		memcpy(&bi, bc + i, sizeof(bi));
-		eqb = ai == bi && eqb;
-		i += 4;
-	}
-	if (i + 2 <= sizeof(T))
-	{
-		u16 as, bs;
-		memcpy(&as, ac + i, sizeof(as));
-		memcpy(&bs, bc + i, sizeof(bs));
-		eqb = as == bs && eqb;
-		i += 2;
-	}
-	if (i != sizeof(T))
-	{
-		ASSERT(i + 1 == sizeof(T));
-		eqb = ac[i] == bc[i] && eqb;
-	}
-	return eqb;
 }
 
 extern Pcsx2Config::GSOptions GSConfig;

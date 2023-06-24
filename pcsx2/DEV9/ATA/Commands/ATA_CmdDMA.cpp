@@ -86,7 +86,7 @@ void ATA::PostCmdDMADataFromHost()
 	else
 		awaitFlush = true;
 
-	Async(-1);
+	Async(static_cast<u32>(-1));
 }
 
 void ATA::ATAreadDMA8Mem(u8* pMem, int size)

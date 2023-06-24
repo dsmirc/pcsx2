@@ -23,8 +23,9 @@
 #define write_portable(a, b, c) (send(a, (const char*)b, c, 0))
 #define close_portable(a) (closesocket(a))
 #define bzero(b, len) (memset((b), '\0', (len)), (void)0)
+#include "common/RedtapeWindows.h"
 #include <WinSock2.h>
-#include <windows.h>
+#include <WS2tcpip.h>
 #else
 #define read_portable(a, b, c) (read(a, b, c))
 #define write_portable(a, b, c) (write(a, b, c))
@@ -74,7 +75,8 @@ bool PINEServer::Initialize(int slot)
 	// yes very good windows s/sun/sin/g sure is fine
 	server.sin_family = AF_INET;
 	// localhost only
-	server.sin_addr.s_addr = inet_addr("127.0.0.1");
+	if (inet_pton(AF_INET, "127.0.0.1", &server.sin_addr) != 0)
+		pxFailRel("Failed to parse 127.0.0.1");
 	server.sin_port = htons(slot);
 
 	if (bind(m_sock, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR)
@@ -166,7 +168,7 @@ int PINEServer::StartSocket()
 {
 	m_msgsock = accept(m_sock, 0, 0);
 
-	if (m_msgsock == -1)
+	if (m_msgsock == static_cast<decltype(m_msgsock)>(-1))
 	{
 		// everything else is non recoverable in our scope
 		// we also mark as recoverable socket errors where it would block a

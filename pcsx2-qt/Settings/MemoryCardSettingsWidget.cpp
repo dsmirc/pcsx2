@@ -497,8 +497,8 @@ void MemoryCardSlotWidget::dragMoveEvent(QDragMoveEvent* event)
 
 void MemoryCardSlotWidget::dropEvent(QDropEvent* event)
 {
-	const QMimeData* data = event->mimeData();
-	const QString text(data ? data->text() : QString());
+	const QMimeData* const mime_data = event->mimeData();
+	const QString text(mime_data ? mime_data->text() : QString());
 	if (text.isEmpty())
 	{
 		event->ignore();

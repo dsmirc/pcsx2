@@ -885,12 +885,12 @@ bool InputManager::ProcessEvent(InputBindingKey key, float value, bool skip_butt
 					// when we activate a multi-key chord (key press), we go through the binding map for all the
 					// other keys in the chord, and cancel them if they have a shorter chord. If they're longer,
 					// they could still activate and take precedence over us, so we leave them alone.
-					for (u32 i = 0; i < binding->num_keys; i++)
+					for (u32 j = 0; j < binding->num_keys; j++)
 					{
-						const auto range = s_binding_map.equal_range(binding->keys[i].MaskDirection());
-						for (auto it = range.first; it != range.second; ++it)
+						const auto other_range = s_binding_map.equal_range(binding->keys[j].MaskDirection());
+						for (auto other_it = other_range.first; other_it != other_range.second; ++other_it)
 						{
-							InputBinding* other_binding = it->second.get();
+							InputBinding* other_binding = other_it->second.get();
 							if (other_binding == binding || IsAxisHandler(other_binding->handler) ||
 								other_binding->num_keys >= binding->num_keys)
 							{

@@ -247,8 +247,8 @@ static __fi T _HwRead_16or32_Page1( u32 addr )
 	//
 	else if( masked_addr >= pgmsk(HW_SPU2_START) && masked_addr < pgmsk(HW_SPU2_END) )
 	{
-		if( sizeof(T) == 2 )
-			ret = SPU2read( addr );
+		if constexpr (sizeof(T) == 2)
+			ret = SPU2read(addr);
 		else
 		{
 			DevCon.Warning( "HwRead32 from SPU2? @ 0x%08X .. What manner of trickery is this?!", addr );
@@ -261,8 +261,8 @@ static __fi T _HwRead_16or32_Page1( u32 addr )
 	else if( (masked_addr >= pgmsk(HW_PS1_GPU_START)) && (masked_addr < pgmsk(HW_PS1_GPU_END)) )
 	{
 		// todo: psx mode: this is new
-		if( sizeof(T) == 2 )
-			DevCon.Warning( "HwRead16 from PS1 GPU? @ 0x%08X .. What manner of trickery is this?!", addr );
+		if constexpr (sizeof(T) == 2)
+			DevCon.Warning("HwRead16 from PS1 GPU? @ 0x%08X .. What manner of trickery is this?!", addr);
 
 		pxAssert(sizeof(T) == 4);
 
@@ -277,7 +277,7 @@ static __fi T _HwRead_16or32_Page1( u32 addr )
 				Console.Warning("%s(%08X) Unexpected 16 or 32 bit access to SIO0 data register!", __FUNCTION__, addr);
 				ret = sio0.GetRxData();
 				ret |= sio0.GetRxData() << 8;
-				if (sizeof(T) == 4)
+				if constexpr (sizeof(T) == 4)
 				{
 					ret |= sio0.GetRxData() << 16;
 					ret |= sio0.GetRxData() << 24;
@@ -289,10 +289,8 @@ static __fi T _HwRead_16or32_Page1( u32 addr )
 			case (HW_SIO_MODE & 0x0fff):
 				ret = sio0.GetMode();
 				
-				if (sizeof(T) == 4)
-				{
+				if constexpr (sizeof(T) == 4)
 					Console.Warning("%s(%08X) Unexpected 32 bit access to SIO0 MODE register!", __FUNCTION__, addr);
-				}
 				
 				break;
 			case (HW_SIO_CTRL & 0x0fff):

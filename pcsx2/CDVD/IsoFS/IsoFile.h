@@ -62,7 +62,7 @@ public:
 	template <class T>
 	T read()
 	{
-		if (sizeof(T) == 1)
+		if constexpr (sizeof(T) == 1)
 			return (T)readByte();
 		else
 		{

@@ -193,11 +193,11 @@ SocketAdapter::SocketAdapter()
 	//For DHCP, we need to override some settings
 	//DNS settings as per direct adapters
 
-	const IP_Address ps2IP{{{internalIP.bytes[0], internalIP.bytes[1], internalIP.bytes[2], 100}}};
+	const IP_Address ps2IP_{{{internalIP.bytes[0], internalIP.bytes[1], internalIP.bytes[2], 100}}};
 	const IP_Address subnet{{{255, 255, 255, 0}}};
 	const IP_Address gateway = internalIP;
 
-	InitInternalServer(&adapter, true, ps2IP, subnet, gateway);
+	InitInternalServer(&adapter, true, ps2IP_, subnet, gateway);
 
 	std::optional<MAC_Address> adMAC = AdapterUtils::GetAdapterMAC(&adapter);
 	if (adMAC.has_value())
@@ -380,16 +380,16 @@ void SocketAdapter::reloadSettings()
 	else
 		foundAdapter = AdapterUtils::GetAdapterAuto(&adapter, &buffer);
 
-	const IP_Address ps2IP = {{{internalIP.bytes[0], internalIP.bytes[1], internalIP.bytes[2], 100}}};
+	const IP_Address ps2IP_ = {{{internalIP.bytes[0], internalIP.bytes[1], internalIP.bytes[2], 100}}};
 	const IP_Address subnet{{{255, 255, 255, 0}}};
 	const IP_Address gateway = internalIP;
 
 	if (foundAdapter)
-		ReloadInternalServer(&adapter, true, ps2IP, subnet, gateway);
+		ReloadInternalServer(&adapter, true, ps2IP_, subnet, gateway);
 	else
 	{
 		pxAssert(false);
-		ReloadInternalServer(nullptr, true, ps2IP, subnet, gateway);
+		ReloadInternalServer(nullptr, true, ps2IP_, subnet, gateway);
 	}
 }
 

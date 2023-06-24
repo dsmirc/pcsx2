@@ -266,14 +266,17 @@ static __fi void _HwWrite_16or32_Page1( u32 addr, T val )
 	//
 	else if( (masked_addr >= pgmsk(HW_USB_START)) && (masked_addr < pgmsk(HW_USB_END)) )
 	{
-		if( sizeof(T) == 2 ) USBwrite16( addr, val ); else USBwrite32( addr, val );
+		if constexpr (sizeof(T) == 2)
+			USBwrite16(addr, val);
+		else
+			USBwrite32(addr, val);
 	}
 	// ------------------------------------------------------------------------
 	// SPU2, accessible in 16 bit mode only!
 	//
 	else if( (masked_addr >= pgmsk(HW_SPU2_START)) && (masked_addr < pgmsk(HW_SPU2_END)) )
 	{
-		if( sizeof(T) == 2 )
+		if constexpr (sizeof(T) == 2)
 			SPU2write( addr, val );
 		else
 		{
@@ -287,8 +290,8 @@ static __fi void _HwWrite_16or32_Page1( u32 addr, T val )
 	else if( (masked_addr >= pgmsk(HW_PS1_GPU_START)) && (masked_addr < pgmsk(HW_PS1_GPU_END)) )
 	{
 		// todo: psx mode: this is new
-		if( sizeof(T) == 2 )
-			DevCon.Warning( "HwWrite16 to PS1 GPU? @ 0x%08X .. What manner of trickery is this?!", addr );
+		if constexpr (sizeof(T) == 2)
+			DevCon.Warning("HwWrite16 to PS1 GPU? @ 0x%08X .. What manner of trickery is this?!", addr);
 
 		pxAssert(sizeof(T) == 4);
 
@@ -318,10 +321,8 @@ static __fi void _HwWrite_16or32_Page1( u32 addr, T val )
 			case (HW_SIO_MODE & 0x0fff):
 				sio0.SetMode(static_cast<u16>(val));
 
-				if (sizeof(T) == 4)
-				{
+				if constexpr (sizeof(T) == 4)
 					Console.Error("%s(%08X, %08X) 32 bit write to 16 bit SIO0 MODE register!", __FUNCTION__, addr, val);
-				}
 				
 				break;
 

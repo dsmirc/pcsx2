@@ -6,13 +6,13 @@
 #include "common/Path.h"
 #include "common/FileSystem.h"
 
-MemoryCardConvertWorker::MemoryCardConvertWorker(QWidget* parent, MemoryCardType type, MemoryCardFileType fileType, const std::string& srcFileName, const std::string& destFileName)
+MemoryCardConvertWorker::MemoryCardConvertWorker(QWidget* parent, MemoryCardType type_, MemoryCardFileType fileType_, const std::string& srcFileName_, const std::string& destFileName_)
 		: QtAsyncProgressThread(parent)
 {
-	this->type = type;
-	this->fileType = fileType;
-	this->srcFileName = srcFileName;
-	this->destFileName = destFileName;
+	type = type_;
+	fileType = fileType_;
+	srcFileName = srcFileName_;
+	destFileName = destFileName_;
 }
 
 MemoryCardConvertWorker::~MemoryCardConvertWorker() = default;
@@ -22,23 +22,23 @@ void MemoryCardConvertWorker::runAsync()
 	switch (type)
 	{
 		case MemoryCardType::File:
-			ConvertToFolder(srcFileName, destFileName, fileType);
+			ConvertToFolder();
 			break;
 		case MemoryCardType::Folder:
-			ConvertToFile(srcFileName, destFileName, fileType);
+			ConvertToFile();
 			break;
 		default:
 			break;
 	}
 }
 
-bool MemoryCardConvertWorker::ConvertToFile(const std::string& srcFolderName, const std::string& destFileName, const MemoryCardFileType type)
+bool MemoryCardConvertWorker::ConvertToFile()
 {
-	const std::string srcPath(Path::Combine(EmuFolders::MemoryCards, srcFolderName));
+	const std::string srcPath(Path::Combine(EmuFolders::MemoryCards, srcFileName));
 	const std::string destPath(Path::Combine(EmuFolders::MemoryCards, destFileName));
 	size_t sizeInMB = 0;
 
-	switch (type)
+	switch (fileType)
 	{
 		case MemoryCardFileType::PS2_8MB:
 			sizeInMB = 8;
@@ -53,7 +53,7 @@ bool MemoryCardConvertWorker::ConvertToFile(const std::string& srcFolderName, co
 			sizeInMB = 64;
 			break;
 		default:
-			Console.Error("%s(%s, %s, %d) Received invalid MemoryCardFileType, aborting", __FUNCTION__, srcPath.c_str(), destPath.c_str(), type);
+			Console.Error("%s(%s, %s, %d) Received invalid MemoryCardFileType, aborting", __FUNCTION__, srcPath.c_str(), destPath.c_str(), fileType);
 			return false;
 	}
 
@@ -84,7 +84,7 @@ bool MemoryCardConvertWorker::ConvertToFile(const std::string& srcFolderName, co
 
 	if (!writeResult)
 	{
-		Console.Error("%s(%s, %s, %d) Failed to write Memory Card contents to file", __FUNCTION__, srcPath.c_str(), destPath.c_str(), type);
+		Console.Error("%s(%s, %s, %d) Failed to write Memory Card contents to file", __FUNCTION__, srcPath.c_str(), destPath.c_str(), fileType);
 		return false;
 	}
 #ifdef _WIN32
@@ -98,10 +98,10 @@ bool MemoryCardConvertWorker::ConvertToFile(const std::string& srcFolderName, co
 	return true;
 }
 
-bool MemoryCardConvertWorker::ConvertToFolder(const std::string& srcFileName, const std::string& destFolderName, const MemoryCardFileType type)
+bool MemoryCardConvertWorker::ConvertToFolder()
 {
 	const std::string srcPath(Path::Combine(EmuFolders::MemoryCards, srcFileName));
-	const std::string destPath(Path::Combine(EmuFolders::MemoryCards, destFolderName));
+	const std::string destPath(Path::Combine(EmuFolders::MemoryCards, destFileName));
 
 	FolderMemoryCard targetFolderMemoryCard;
 	Pcsx2Config::McdOptions config;
@@ -112,7 +112,7 @@ bool MemoryCardConvertWorker::ConvertToFolder(const std::string& srcFileName, co
 
 	if (!sourceBufferOpt.has_value())
 	{
-		Console.Error("%s(%s, %s, %d) Failed to open file Memory Card!", __FUNCTION__, srcFileName.c_str(), destFolderName.c_str(), type);
+		Console.Error("%s(%s, %s, %d) Failed to open file Memory Card!", __FUNCTION__, srcFileName.c_str(), destFileName.c_str(), fileType);
 		return false;
 	}
 

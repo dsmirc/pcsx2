@@ -262,16 +262,16 @@ bool D3D12Context::CreateCommandLists()
 		CommandListResources& res = m_command_lists[i];
 		HRESULT hr;
 
-		for (u32 i = 0; i < 2; i++)
+		for (u32 j = 0; j < 2; j++)
 		{
 			hr = m_device->CreateCommandAllocator(
-				D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(res.command_allocators[i].put()));
+				D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(res.command_allocators[j].put()));
 			pxAssertRel(SUCCEEDED(hr), "Create command allocator");
 			if (FAILED(hr))
 				return false;
 
-			hr = m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, res.command_allocators[i].get(),
-				nullptr, IID_PPV_ARGS(res.command_lists[i].put()));
+			hr = m_device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, res.command_allocators[j].get(),
+				nullptr, IID_PPV_ARGS(res.command_lists[j].put()));
 			if (FAILED(hr))
 			{
 				Console.Error("Failed to create command list: %08X", hr);
@@ -279,7 +279,7 @@ bool D3D12Context::CreateCommandLists()
 			}
 
 			// Close the command lists, since the first thing we do is reset them.
-			hr = res.command_lists[i]->Close();
+			hr = res.command_lists[j]->Close();
 			pxAssertRel(SUCCEEDED(hr), "Closing new command list failed");
 			if (FAILED(hr))
 				return false;

@@ -377,12 +377,12 @@ void GSRasterizer::DrawLine(const GSVertexSW* vertex, const u16* index)
 		return;
 	}
 
-	int steps = dpi.v[i];
+	int steps = dpi.I32[i];
 
 	if (steps > 0)
 	{
 		GSVertexSW edge = v0;
-		GSVertexSW dedge = dv / GSVector4(dp.v[i]);
+		GSVertexSW dedge = dv / GSVector4(dp.I32[i]);
 
 		GSVertexSW* RESTRICT e = m_edge.buff;
 

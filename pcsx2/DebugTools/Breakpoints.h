@@ -17,6 +17,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <vector>
 
 #include "DebugInterface.h"
@@ -113,8 +114,8 @@ struct MemCheck
 class CBreakPoints
 {
 public:
-	static const size_t INVALID_BREAKPOINT = -1;
-	static const size_t INVALID_MEMCHECK = -1;
+	static const size_t INVALID_BREAKPOINT = static_cast<size_t>(static_cast<std::make_signed_t<size_t>>(-1));
+	static const size_t INVALID_MEMCHECK = static_cast<size_t>(static_cast<std::make_signed_t<size_t>>(-1));
 
 	static bool IsAddressBreakPoint(BreakPointCpu cpu, u32 addr);
 	static bool IsAddressBreakPoint(BreakPointCpu cpu, u32 addr, bool* enabled);

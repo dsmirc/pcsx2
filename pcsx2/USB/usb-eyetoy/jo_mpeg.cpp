@@ -153,13 +153,13 @@ static int jo_processDU(jo_bits_t *bits, float A[64], const unsigned char htdc[9
 		}
 		int AC = Q[i++];
 		int aAC = AC < 0 ? -AC : AC;
-		int code = 0, size = 0;
+		int code = 0, lsize = 0;
 		if (run<32 && aAC<=40) {
 			code = s_jo_HTAC[run][aAC-1][0];
-			size = s_jo_HTAC[run][aAC-1][1];
+			lsize = s_jo_HTAC[run][aAC-1][1];
 			if (AC < 0) code += 1;
 		}
-		if(!size) {
+		if(!lsize) {
 			jo_writeBits(bits, 1, 6);
 			jo_writeBits(bits, run, 6);
 			if (AC < -127) {
@@ -168,9 +168,9 @@ static int jo_processDU(jo_bits_t *bits, float A[64], const unsigned char htdc[9
 				jo_writeBits(bits, 0, 12);
 			}
 			code = AC & 0xFFF;
-			size = 12;
+			lsize = 12;
 		}
-		jo_writeBits(bits, code, size);
+		jo_writeBits(bits, code, lsize);
 	}
 	jo_writeBits(bits, 2, 2);
 

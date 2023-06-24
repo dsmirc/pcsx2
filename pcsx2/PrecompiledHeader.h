@@ -18,8 +18,8 @@
 
 // Disable some pointless warnings...
 #ifdef _MSC_VER
-#	pragma warning(disable:4250) //'class' inherits 'method' via dominance
-#	pragma warning(disable:4996) //ignore the stricmp deprecated warning
+//#	pragma warning(disable:4250) //'class' inherits 'method' via dominance
+//#	pragma warning(disable:4996) //ignore the stricmp deprecated warning
 #endif
 
 #include "common/Pcsx2Defs.h"
@@ -55,8 +55,16 @@
 #include <stddef.h>
 #include <sys/stat.h>
 
+#ifdef _MSC_VER
+#pragma warning(push, 0)
+#endif
+
 // We use fmt a fair bit now.
-#include "fmt/core.h"
+#include "fmt/format.h"
+
+#ifdef _MSC_VER
+#pragma warning(pop)
+#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 // Begin Pcsx2 Includes: Add items here that are local to Pcsx2 but stay relatively

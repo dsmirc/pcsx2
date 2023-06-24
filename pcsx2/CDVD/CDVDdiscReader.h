@@ -80,7 +80,7 @@ public:
 	bool DiscReady();
 };
 
-extern std::unique_ptr<IOCtlSrc> src;
+extern std::unique_ptr<IOCtlSrc> g_ioctl_src;
 
 std::vector<std::string> GetOpticalDriveList();
 void GetValidDrive(std::string& drive);

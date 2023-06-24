@@ -804,10 +804,10 @@ namespace Sessions
 							case (u8)IP_Type::UDP:
 								//Read ports directly from the payload
 								//both UDP and TCP have the same locations for ports
-								IP_PayloadPtr* payload = static_cast<IP_PayloadPtr*>(retPkt->GetPayload());
+								IP_PayloadPtr* payload2 = static_cast<IP_PayloadPtr*>(retPkt->GetPayload());
 								int offset = 0;
-								NetLib::ReadUInt16(payload->data, &offset, &srvPort); //src
-								NetLib::ReadUInt16(payload->data, &offset, &ps2Port); //dst
+								NetLib::ReadUInt16(payload2->data, &offset, &srvPort); //src
+								NetLib::ReadUInt16(payload2->data, &offset, &ps2Port); //dst
 						}
 
 						ConnectionKey Key{};

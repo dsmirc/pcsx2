@@ -19,12 +19,12 @@
 // Messages Called at Execution Time...
 //------------------------------------------------------------------
 
-static inline void mVUbadOp0  (u32 prog, u32 pc) { Console.Error("microVU0 Warning: Exiting... Block contains an illegal opcode. [%04x] [%03d]", pc, prog); }
-static inline void mVUbadOp1  (u32 prog, u32 pc) { Console.Error("microVU1 Warning: Exiting... Block contains an illegal opcode. [%04x] [%03d]", pc, prog); }
-static inline void mVUwarning0(u32 prog, u32 pc) { Console.Error("microVU0 Warning: Exiting from Possible Infinite Loop [%04x] [%03d]", pc, prog); }
-static inline void mVUwarning1(u32 prog, u32 pc) { Console.Error("microVU1 Warning: Exiting from Possible Infinite Loop [%04x] [%03d]", pc, prog); }
-static inline void mVUprintPC1(u32 pc) { Console.WriteLn("Block Start PC = 0x%04x", pc); }
-static inline void mVUprintPC2(u32 pc) { Console.WriteLn("Block End PC   = 0x%04x", pc); }
+static inline void mVUbadOp0  (u32 prog, u32 pc_) { Console.Error("microVU0 Warning: Exiting... Block contains an illegal opcode. [%04x] [%03d]", pc_, prog); }
+static inline void mVUbadOp1  (u32 prog, u32 pc_) { Console.Error("microVU1 Warning: Exiting... Block contains an illegal opcode. [%04x] [%03d]", pc_, prog); }
+static inline void mVUwarning0(u32 prog, u32 pc_) { Console.Error("microVU0 Warning: Exiting from Possible Infinite Loop [%04x] [%03d]", pc_, prog); }
+static inline void mVUwarning1(u32 prog, u32 pc_) { Console.Error("microVU1 Warning: Exiting from Possible Infinite Loop [%04x] [%03d]", pc_, prog); }
+static inline void mVUprintPC1(u32 pc_) { Console.WriteLn("Block Start PC = 0x%04x", pc_); }
+static inline void mVUprintPC2(u32 pc_) { Console.WriteLn("Block End PC   = 0x%04x", pc_); }
 
 //------------------------------------------------------------------
 // Program Range Checking and Setting up Ranges
@@ -45,17 +45,17 @@ __fi void mVUcheckIsSame(mV)
 }
 
 // Sets up microProgram PC ranges based on whats been recompiled
-void mVUsetupRange(microVU& mVU, s32 pc, bool isStartPC)
+void mVUsetupRange(microVU& mVU, s32 pc_, bool isStartPC)
 {
 	std::deque<microRange>*& ranges = mVUcurProg.ranges;
-	if (pc > (s64)mVU.microMemSize)
+	if (pc_ > (s64)mVU.microMemSize)
 	{
-		Console.Error("microVU%d: PC outside of VU memory PC=0x%04x", mVU.index, pc);
+		Console.Error("microVU%d: PC outside of VU memory PC=0x%04x", mVU.index, pc_);
 		pxFailDev("microVU: PC out of VU memory");
 	}
 
 	// The PC handling will prewrap the PC so we need to set the end PC to the end of the micro memory, but only if it wraps, no more.
-	const s32 cur_pc = (!isStartPC && mVUrange.start > pc && pc == 0) ? mVU.microMemSize : pc;
+	const s32 cur_pc = (!isStartPC && mVUrange.start > pc_ && pc_ == 0) ? mVU.microMemSize : pc_;
 
 	if (isStartPC) // Check if startPC is already within a block we've recompiled
 	{

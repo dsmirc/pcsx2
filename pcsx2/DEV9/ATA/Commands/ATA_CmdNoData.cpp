@@ -44,7 +44,7 @@ void ATA::HDD_FlushCache() //Can't when DRQ set
 	DevCon.WriteLn("DEV9: HDD_FlushCache");
 
 	awaitFlush = true;
-	Async(-1);
+	Async(static_cast<u32>(-1));
 }
 
 void ATA::HDD_InitDevParameters()

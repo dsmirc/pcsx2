@@ -158,7 +158,7 @@ public:
 			}
 			return 0;
 		}
-		return -1;
+		return static_cast<u64>(-1ll);
 	}
 
 	virtual ExpressionType getReferenceType(u64 referenceIndex)
@@ -295,15 +295,15 @@ BreakPointCpu R5900DebugInterface::getCpuType()
 u32 R5900DebugInterface::read8(u32 address)
 {
 	if (!isValidAddress(address))
-		return -1;
+		return static_cast<u32>(-1);
 
 	return memRead8(address);
 }
 
 u32 R5900DebugInterface::read8(u32 address, bool& valid)
 {
-	if (!(valid = isValidAddress(address)))
-		return -1;
+	if ((valid = isValidAddress(address)) == false)
+		return static_cast<u32>(-1);
 
 	return memRead8(address);
 }
@@ -312,7 +312,7 @@ u32 R5900DebugInterface::read8(u32 address, bool& valid)
 u32 R5900DebugInterface::read16(u32 address)
 {
 	if (!isValidAddress(address) || address % 2)
-		return -1;
+		return static_cast<u32>(-1);
 
 	return memRead16(address);
 }
@@ -320,7 +320,7 @@ u32 R5900DebugInterface::read16(u32 address)
 u32 R5900DebugInterface::read16(u32 address, bool& valid)
 {
 	if (!(valid = (isValidAddress(address) || address % 2)))
-		return -1;
+		return static_cast<u32>(-1);
 
 	return memRead16(address);
 }
@@ -328,7 +328,7 @@ u32 R5900DebugInterface::read16(u32 address, bool& valid)
 u32 R5900DebugInterface::read32(u32 address)
 {
 	if (!isValidAddress(address) || address % 4)
-		return -1;
+		return static_cast<u32>(-1);
 
 	return memRead32(address);
 }
@@ -336,7 +336,7 @@ u32 R5900DebugInterface::read32(u32 address)
 u32 R5900DebugInterface::read32(u32 address, bool& valid)
 {
 	if (!(valid = (isValidAddress(address) || address % 4)))
-		return -1;
+		return static_cast<u32>(-1);
 
 	return memRead32(address);
 }
@@ -344,7 +344,7 @@ u32 R5900DebugInterface::read32(u32 address, bool& valid)
 u64 R5900DebugInterface::read64(u32 address)
 {
 	if (!isValidAddress(address) || address % 8)
-		return -1;
+		return static_cast<u64>(-1ll);
 
 	return memRead64(address);
 }
@@ -352,7 +352,7 @@ u64 R5900DebugInterface::read64(u32 address)
 u64 R5900DebugInterface::read64(u32 address, bool& valid)
 {
 	if (!(valid = (isValidAddress(address) || address % 8)))
-		return -1;
+		return static_cast<u64>(-1ll);
 
 	return memRead64(address);
 }
@@ -362,7 +362,7 @@ u128 R5900DebugInterface::read128(u32 address)
 	alignas(16) u128 result;
 	if (!isValidAddress(address) || address % 16)
 	{
-		result.hi = result.lo = -1;
+		result.hi = result.lo = static_cast<u64>(-1ll);
 		return result;
 	}
 
@@ -753,42 +753,42 @@ BreakPointCpu R3000DebugInterface::getCpuType()
 u32 R3000DebugInterface::read8(u32 address)
 {
 	if (!isValidAddress(address))
-		return -1;
+		return static_cast<u32>(-1);
 	return iopMemRead8(address);
 }
 
 u32 R3000DebugInterface::read8(u32 address, bool& valid)
 {
-	if (!(valid = isValidAddress(address)))
-		return -1;
+	if ((valid = isValidAddress(address)) == false)
+		return static_cast<u32>(-1);
 	return iopMemRead8(address);
 }
 
 u32 R3000DebugInterface::read16(u32 address)
 {
 	if (!isValidAddress(address))
-		return -1;
+		return static_cast<u32>(-1);
 	return iopMemRead16(address);
 }
 
 u32 R3000DebugInterface::read16(u32 address, bool& valid)
 {
-	if (!(valid = isValidAddress(address)))
-		return -1;
+	if ((valid = isValidAddress(address)) == false)
+		return static_cast<u32>(-1);
 	return iopMemRead16(address);
 }
 
 u32 R3000DebugInterface::read32(u32 address)
 {
 	if (!isValidAddress(address))
-		return -1;
+		return static_cast<u32>(-1);
 	return iopMemRead32(address);
 }
 
 u32 R3000DebugInterface::read32(u32 address, bool& valid)
 {
-	if (!(valid = isValidAddress(address)))
-		return -1;
+	if ((valid = isValidAddress(address)) == false)
+		return static_cast<u32>(-1);
 	return iopMemRead32(address);
 
 }
@@ -918,7 +918,7 @@ u128 R3000DebugInterface::getRegister(int cat, int num)
 			}
 			break;
 		default:
-			value = -1;
+			value = static_cast<u32>(-1);
 			break;
 	}
 

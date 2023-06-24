@@ -245,9 +245,9 @@ u64 mVUrangesHash(microVU& mVU, microProgram& prog)
 void mVUprintUniqueRatio(microVU& mVU)
 {
 	std::vector<u64> v;
-	for (u32 pc = 0; pc < mProgSize / 2; pc++)
+	for (u32 vpc = 0; vpc < mProgSize / 2; vpc++)
 	{
-		microProgramList* list = mVU.prog.prog[pc];
+		microProgramList* list = mVU.prog.prog[vpc];
 		if (!list)
 			continue;
 		std::deque<microProgram*>::iterator it(list->begin());

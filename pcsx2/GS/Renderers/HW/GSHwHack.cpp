@@ -1032,21 +1032,21 @@ bool GSHwHack::OI_HauntingGround(GSRendererHW& r, GSTexture* rt, GSTexture* ds, 
 
 			for (auto i = list.begin(); i != list.end();)
 			{
-				GSTextureCache::Target* t = *i;
+				GSTextureCache::Target* tgt = *i;
 				auto ei = i++;
 
 				// There's two cases we hit here - when we clear 3380 via 3000, and when we overlap 3000 by writing to 3380.
 				// The latter is actually only 256x224, which ends at 337F, but because the game's a pain in the ass, it
 				// shuffles 512x512, causing the target to expand. It'd actually be shuffling junk and wasting draw cycles,
 				// but when did that stop anyone? So, we can get away with just saying "if it's before, ignore".
-				if (t->m_TEX0.TBP0 <= bp)
+				if (tgt->m_TEX0.TBP0 <= bp)
 				{
 					// don't remove ourself..
 					continue;
 				}
 
 				// Has to intersect.
-				if (!t->Overlaps(bp, bw, psm, rc))
+				if (!tgt->Overlaps(bp, bw, psm, rc))
 					continue;
 
 				// Another annoying case. Sometimes it clears with RGB masked, only writing to A. We don't want to kill the
@@ -1054,21 +1054,21 @@ bool GSHwHack::OI_HauntingGround(GSRendererHW& r, GSTexture* rt, GSTexture* ds, 
 				if (fbmsk != 0)
 				{
 					GL_CACHE("OI_HauntingGround(%x, %u, %s, %d,%d => %d,%d): Dirty target at %x %u %s %08X", bp, bw,
-						psm_str(psm), rc.x, rc.y, rc.z, rc.w, t->m_TEX0.TBP0, t->m_TEX0.TBW, psm_str(t->m_TEX0.PSM),
+						psm_str(psm), rc.x, rc.y, rc.z, rc.w, tgt->m_TEX0.TBP0, tgt->m_TEX0.TBW, psm_str(tgt->m_TEX0.PSM),
 						fbmsk);
 
-					g_texture_cache->AddDirtyRectTarget(t, rc, psm, bw, RGBAMask{GSUtil::GetChannelMask(psm, fbmsk)});
+					g_texture_cache->AddDirtyRectTarget(tgt, rc, psm, bw, RGBAMask{GSUtil::GetChannelMask(psm, fbmsk)});
 				}
 				else
 				{
 					GL_CACHE("OI_HauntingGround(%x, %u, %s, %d,%d => %d,%d): Removing target at %x %u %s", bp, bw,
-						psm_str(psm), rc.x, rc.y, rc.z, rc.w, t->m_TEX0.TBP0, t->m_TEX0.TBW, psm_str(t->m_TEX0.PSM));
+						psm_str(psm), rc.x, rc.y, rc.z, rc.w, tgt->m_TEX0.TBP0, tgt->m_TEX0.TBW, psm_str(tgt->m_TEX0.PSM));
 
 					// Need to also remove any sources which reference this target.
-					g_texture_cache->InvalidateSourcesFromTarget(t);
+					g_texture_cache->InvalidateSourcesFromTarget(tgt);
 
 					list.erase(ei);
-					delete t;
+					delete tgt;
 				}
 			}
 		}

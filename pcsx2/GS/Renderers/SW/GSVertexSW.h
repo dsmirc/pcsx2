@@ -199,16 +199,16 @@ struct alignas(32) GSVertexSW
 		{
 			// p.z, p.w, t.z, t.w, c.x, c.y, c.z, c.w
 
-			GSVector8 v0 = GSVector8(v[0].p.zwzw(v[0].t), v[0].c);
-			GSVector8 v1 = GSVector8(v[1].p.zwzw(v[1].t), v[1].c);
-			GSVector8 v2 = GSVector8(v[2].p.zwzw(v[2].t), v[2].c);
-			GSVector8 v3 = GSVector8(v[3].p.zwzw(v[3].t), v[3].c);
-			GSVector8 v4 = GSVector8(v[4].p.zwzw(v[4].t), v[4].c);
-			GSVector8 v5 = GSVector8(v[5].p.zwzw(v[5].t), v[5].c);
+			const GSVector8 v0_ = GSVector8(v[0].p.zwzw(v[0].t), v[0].c);
+			const GSVector8 v1_ = GSVector8(v[1].p.zwzw(v[1].t), v[1].c);
+			const GSVector8 v2_ = GSVector8(v[2].p.zwzw(v[2].t), v[2].c);
+			const GSVector8 v3_ = GSVector8(v[3].p.zwzw(v[3].t), v[3].c);
+			const GSVector8 v4_ = GSVector8(v[4].p.zwzw(v[4].t), v[4].c);
+			const GSVector8 v5_ = GSVector8(v[5].p.zwzw(v[5].t), v[5].c);
 
-			GSVector8 test = ((v0 == v1) & (v0 == v2)) & ((v0 == v3) & (v0 == v4)) & (v0 == v5);
+			const GSVector8 test_ = ((v0_ == v1_) & (v0_ == v2_)) & ((v0_ == v3_) & (v0_ == v4_)) & (v0_ == v5_);
 
-			return test.alltrue();
+			return test_.alltrue();
 		}
 
 #else

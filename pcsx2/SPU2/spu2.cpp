@@ -325,18 +325,10 @@ s32 SPU2freeze(FreezeAction mode, freezeData* data)
 
 	auto& spud = (SPU2Savestate::DataBlock&)*(data->data);
 
-	switch (mode)
-	{
-		case FreezeAction::Load:
-			return SPU2Savestate::ThawIt(spud);
-		case FreezeAction::Save:
-			return SPU2Savestate::FreezeIt(spud);
-
-			jNO_DEFAULT;
-	}
-
-	// technically unreachable, but kills a warning:
-	return 0;
+	if (mode == FreezeAction::Load)
+		return SPU2Savestate::ThawIt(spud);
+	else
+		return SPU2Savestate::FreezeIt(spud);
 }
 
 void SPU2::CheckForConfigChanges(const Pcsx2Config& old_config)

@@ -208,7 +208,7 @@ namespace R3000A
 	// This is a workaround for GHS on *NIX platforms
 	// Whenever a program splits directories with a backslash (ulaunchelf)
 	// the directory is considered non-existant
-	static __fi std::string clean_path(const std::string path)
+	static __fi std::string clean_path(const std::string& path)
 	{
 		std::string ret = path;
 		std::replace(ret.begin(), ret.end(), '\\', '/');
@@ -588,7 +588,7 @@ namespace R3000A
 			{
 				if (!freefdcount())
 				{
-					v0 = -IOP_EMFILE;
+					v0 = static_cast<u32>(-IOP_EMFILE);
 					pc = ra;
 					return 1;
 				}

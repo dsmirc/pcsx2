@@ -774,7 +774,7 @@ void recClear(u32 addr, u32 size)
 
 	int toRemoveLast = blockidx;
 
-	while ((pexblock = recBlocks[blockidx]))
+	while ((pexblock = recBlocks[blockidx]) != nullptr)
 	{
 		u32 blockstart = pexblock->startpc;
 		u32 blockend = pexblock->startpc + pexblock->size * 4;
@@ -812,7 +812,7 @@ void recClear(u32 addr, u32 size)
 
 	upperextent = std::min(upperextent, ceiling);
 
-	for (int i = 0; (pexblock = recBlocks[i]); i++)
+	for (int i = 0; (pexblock = recBlocks[i]) != nullptr; i++)
 	{
 		if (s_pCurBlock == PC_GETBLOCK(pexblock->startpc))
 			continue;
@@ -1530,16 +1530,16 @@ bool COP2IsQOP(u32 code)
 
 void dynarecCheckBreakpoint()
 {
-	u32 pc = cpuRegs.pc;
-	if (CBreakPoints::CheckSkipFirst(BREAKPOINT_EE, pc) != 0)
+	const u32 current_pc = cpuRegs.pc;
+	if (CBreakPoints::CheckSkipFirst(BREAKPOINT_EE, current_pc) != 0)
 		return;
 
-	int bpFlags = isBreakpointNeeded(pc);
+	int bpFlags = isBreakpointNeeded(current_pc);
 	bool hit = false;
 	//check breakpoint at current pc
 	if (bpFlags & 1)
 	{
-		auto cond = CBreakPoints::GetBreakPointCondition(BREAKPOINT_EE, pc);
+		auto cond = CBreakPoints::GetBreakPointCondition(BREAKPOINT_EE, current_pc);
 		if (cond == NULL || cond->Evaluate())
 		{
 			hit = true;
@@ -1548,7 +1548,7 @@ void dynarecCheckBreakpoint()
 	//check breakpoint in delay slot
 	if (bpFlags & 2)
 	{
-		auto cond = CBreakPoints::GetBreakPointCondition(BREAKPOINT_EE, pc + 4);
+		auto cond = CBreakPoints::GetBreakPointCondition(BREAKPOINT_EE, current_pc + 4);
 		if (cond == NULL || cond->Evaluate())
 			hit = true;
 	}
@@ -1563,8 +1563,8 @@ void dynarecCheckBreakpoint()
 
 void dynarecMemcheck()
 {
-	u32 pc = cpuRegs.pc;
-	if (CBreakPoints::CheckSkipFirst(BREAKPOINT_EE, pc) != 0)
+	const u32 current_pc = cpuRegs.pc;
+	if (CBreakPoints::CheckSkipFirst(BREAKPOINT_EE, current_pc) != 0)
 		return;
 
 	CBreakPoints::SetBreakpointTriggered(true);
@@ -1689,7 +1689,6 @@ void encodeMemcheck()
 
 void recompileNextInstruction(bool delayslot, bool swapped_delay_slot)
 {
-	u32 i;
 	int count;
 
 	if (EmuConfig.EnablePatches)
@@ -1746,7 +1745,7 @@ void recompileNextInstruction(bool delayslot, bool swapped_delay_slot)
 	// pc might be past s_nEndBlock if the last instruction in the block is a DI.
 	if (pc <= s_nEndBlock)
 	{
-		for (i = 0; i < iREGCNT_GPR; ++i)
+		for (u32 i = 0; i < iREGCNT_GPR; ++i)
 		{
 			if (x86regs[i].inuse)
 			{
@@ -1758,7 +1757,7 @@ void recompileNextInstruction(bool delayslot, bool swapped_delay_slot)
 			}
 		}
 
-		for (i = 0; i < iREGCNT_XMM; ++i)
+		for (u32 i = 0; i < iREGCNT_XMM; ++i)
 		{
 			if (xmmregs[i].inuse)
 			{
@@ -2308,7 +2307,7 @@ static void recRecompile(const u32 startpc)
 	// go until the next branch
 	i = startpc;
 	s_nEndBlock = 0xffffffff;
-	s_branchTo = -1;
+	s_branchTo = static_cast<u32>(-1);
 
 	// Timeout loop speedhack.
 	// God of War 2 and other games (e.g. NFS series) have these timeout loops which just spin for a few thousand
@@ -2327,7 +2326,7 @@ static void recRecompile(const u32 startpc)
 	// if the register being decremented, which appears to vary. So far I haven't seen any which increment instead
 	// of decrementing, so we'll limit the test to that to be safe.
 	//
-	s32 timeout_reg = -1;
+	u32 timeout_reg = static_cast<u32>(-1);
 	bool is_timeout_loop = true;
 
 	// compile breakpoints as individual blocks
@@ -2676,10 +2675,8 @@ StartRecomp:
 	if (HWADDR(pc) <= Ps2MemSize::MainRam)
 	{
 		BASEBLOCKEX* oldBlock;
-		int i;
-
-		i = recBlocks.LastIndex(HWADDR(pc) - 4);
-		while ((oldBlock = recBlocks[i--]))
+		int rbi = recBlocks.LastIndex(HWADDR(pc) - 4);
+		while ((oldBlock = recBlocks[rbi--]) != nullptr)
 		{
 			if (oldBlock == s_pCurBlockEx)
 				continue;

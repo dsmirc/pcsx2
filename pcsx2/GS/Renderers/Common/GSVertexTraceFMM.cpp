@@ -137,7 +137,7 @@ void GSVertexTraceFMM::FindMinMax(GSVertexTrace& vt, const void* vertex, const u
 
 				GSVector4 q;
 				// Sprites always have indices == vertices, so we don't have to look at the index table here
-				if (primclass == GS_SPRITE_CLASS)
+				if constexpr (primclass == GS_SPRITE_CLASS)
 					q = stq1.wwww();
 				else
 					q = stq0.wwww(stq1);

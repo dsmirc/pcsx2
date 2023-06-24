@@ -179,13 +179,7 @@ bool GSDevice11::Create()
 	{
 		// HACK: check AMD
 		// Broken point sampler should be enabled only on AMD.
-		wil::com_ptr_nothrow<IDXGIDevice> dxgi_device;
-		wil::com_ptr_nothrow<IDXGIAdapter1> dxgi_adapter;
-		if (SUCCEEDED(m_dev->QueryInterface(dxgi_device.put())) &&
-			SUCCEEDED(dxgi_device->GetParent(IID_PPV_ARGS(dxgi_adapter.put()))))
-		{
-			m_features.broken_point_sampler = (D3D::GetVendorID(dxgi_adapter.get()) == D3D::VendorID::AMD);
-		}
+		m_features.broken_point_sampler = (D3D::GetVendorID(dxgi_adapter.get()) == D3D::VendorID::AMD);
 	}
 
 	SetFeatures(dxgi_adapter.get());
@@ -599,7 +593,7 @@ bool GSDevice11::CreateSwapChain()
 	RECT client_rc{};
 	GetClientRect(window_hwnd, &client_rc);
 
-	DXGI_MODE_DESC fullscreen_mode;
+	DXGI_MODE_DESC fullscreen_mode = {};
 	wil::com_ptr_nothrow<IDXGIOutput> fullscreen_output;
 	if (Host::IsFullscreen())
 	{
@@ -838,8 +832,11 @@ void GSDevice11::ResizeWindow(s32 new_window_width, s32 new_window_height, float
 
 	m_window_info.surface_scale = new_window_scale;
 
-	if (m_window_info.surface_width == new_window_width && m_window_info.surface_height == new_window_height)
+	if (m_window_info.surface_width == static_cast<u32>(new_window_width) &&
+		m_window_info.surface_height == static_cast<u32>(new_window_height))
+	{
 		return;
+	}
 
 	m_swap_chain_rtv.reset();
 

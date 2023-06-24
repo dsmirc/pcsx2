@@ -50,7 +50,8 @@ public:
 	u32 vuCycleIdx;  // Used for VU cycle stealing hack
 	u32 vuFBRST;
 
-	enum InterruptFlag {
+	enum InterruptFlag : u32
+	{
 		InterruptFlagFinish = 1 << 0,
 		InterruptFlagSignal = 1 << 1,
 		InterruptFlagLabel  = 1 << 2,

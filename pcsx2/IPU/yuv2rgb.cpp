@@ -24,6 +24,10 @@
 #include "IPU/IPU_MultiISA.h"
 #include "IPU/yuv2rgb.h"
 
+#ifdef _MSC_VER
+#pragma warning(disable: 4310) // warning C4310: cast truncates constant value
+#endif
+
 // The IPU's colour space conversion conforms to ITU-R Recommendation BT.601 if anyone wants to make a
 // faster or "more accurate" implementation, but this is the precise documented integer method used by
 // the hardware and is fast enough with SSE2.

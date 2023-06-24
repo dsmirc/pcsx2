@@ -398,9 +398,9 @@ namespace usb_pad
 		}
 	}
 
-	int PadState::TokenOut(const u8* data, int len)
+	int PadState::TokenOut(const u8* data_, int len)
 	{
-		const ff_data* ffdata = reinterpret_cast<const ff_data*>(data);
+		const ff_data* ffdata = reinterpret_cast<const ff_data*>(data_);
 		bool hires = (type == WT_DRIVING_FORCE_PRO || type == WT_DRIVING_FORCE_PRO_1102);
 		ParseFFData(ffdata, hires);
 		return len;

@@ -672,6 +672,8 @@ void GSDevice::SetHWDrawConfigForAlphaPass(GSHWDrawConfig::PSSelector* ps,
 #elif defined(__GNUC__)
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wignored-qualifiers"
+#elif defined(_MSC_VER)
+#pragma warning(push, 0)
 #endif
 
 // Kinda grotty, but better than copy/pasting the relevant bits in..
@@ -683,6 +685,8 @@ void GSDevice::SetHWDrawConfigForAlphaPass(GSHWDrawConfig::PSSelector* ps,
 #pragma clang diagnostic pop
 #elif defined(__GNUC__)
 #pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
 #endif
 
 bool GSDevice::GetCASShaderSource(std::string* source)

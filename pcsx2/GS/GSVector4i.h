@@ -44,7 +44,6 @@ public:
 		struct { int x, y, z, w; };
 		struct { int r, g, b, a; };
 		struct { int left, top, right, bottom; };
-		int v[4];
 		float F32[4];
 		s8  I8[16];
 		s16 I16[8];
@@ -157,9 +156,9 @@ public:
 #endif
 	}
 
-	__forceinline void operator=(__m128i m)
+	__forceinline void operator=(__m128i m_)
 	{
-		this->m = m;
+		m = m_;
 	}
 
 	__forceinline operator __m128i() const
@@ -194,13 +193,13 @@ public:
 		return (*this < zwzw()).mask() != 0x00ff;
 	}
 
-	__forceinline GSVector4i runion(const GSVector4i& a) const
+	__forceinline GSVector4i runion(const GSVector4i& v) const
 	{
-		int i = (upl64(a) < uph64(a)).mask();
+		int i = (upl64(v) < uph64(v)).mask();
 
 		if (i == 0xffff)
 		{
-			return runion_ordered(a);
+			return runion_ordered(v);
 		}
 
 		if ((i & 0x00ff) == 0x00ff)
@@ -210,20 +209,20 @@ public:
 
 		if ((i & 0xff00) == 0xff00)
 		{
-			return a;
+			return v;
 		}
 
 		return GSVector4i::zero();
 	}
 
-	__forceinline GSVector4i runion_ordered(const GSVector4i& a) const
+	__forceinline GSVector4i runion_ordered(const GSVector4i& v) const
 	{
-		return min_i32(a).upl64(max_i32(a).srl<8>());
+		return min_i32(v).upl64(max_i32(v).srl<8>());
 	}
 
-	__forceinline GSVector4i rintersect(const GSVector4i& a) const
+	__forceinline GSVector4i rintersect(const GSVector4i& v) const
 	{
-		return sat_i32(a);
+		return sat_i32(v);
 	}
 
 	template <Align_Mode mode>
@@ -274,129 +273,129 @@ public:
 		return (u32)store(v);
 	}
 
-	__forceinline GSVector4i sat_i8(const GSVector4i& a, const GSVector4i& b) const
+	__forceinline GSVector4i sat_i8(const GSVector4i& min, const GSVector4i& max) const
 	{
-		return max_i8(a).min_i8(b);
+		return max_i8(min).min_i8(max);
 	}
 
-	__forceinline GSVector4i sat_i8(const GSVector4i& a) const
+	__forceinline GSVector4i sat_i8(const GSVector4i& minmax) const
 	{
-		return max_i8(a.xyxy()).min_i8(a.zwzw());
+		return max_i8(minmax.xyxy()).min_i8(minmax.zwzw());
 	}
 
-	__forceinline GSVector4i sat_i16(const GSVector4i& a, const GSVector4i& b) const
+	__forceinline GSVector4i sat_i16(const GSVector4i& min, const GSVector4i& max) const
 	{
-		return max_i16(a).min_i16(b);
+		return max_i16(min).min_i16(max);
 	}
 
-	__forceinline GSVector4i sat_i16(const GSVector4i& a) const
+	__forceinline GSVector4i sat_i16(const GSVector4i& minmax) const
 	{
-		return max_i16(a.xyxy()).min_i16(a.zwzw());
+		return max_i16(minmax.xyxy()).min_i16(minmax.zwzw());
 	}
 
-	__forceinline GSVector4i sat_i32(const GSVector4i& a, const GSVector4i& b) const
+	__forceinline GSVector4i sat_i32(const GSVector4i& min, const GSVector4i& max) const
 	{
-		return max_i32(a).min_i32(b);
+		return max_i32(min).min_i32(max);
 	}
 
-	__forceinline GSVector4i sat_i32(const GSVector4i& a) const
+	__forceinline GSVector4i sat_i32(const GSVector4i& minmax) const
 	{
-		return max_i32(a.xyxy()).min_i32(a.zwzw());
+		return max_i32(minmax.xyxy()).min_i32(minmax.zwzw());
 	}
 
-	__forceinline GSVector4i sat_u8(const GSVector4i& a, const GSVector4i& b) const
+	__forceinline GSVector4i sat_u8(const GSVector4i& min, const GSVector4i& max) const
 	{
-		return max_u8(a).min_u8(b);
+		return max_u8(min).min_u8(max);
 	}
 
-	__forceinline GSVector4i sat_u8(const GSVector4i& a) const
+	__forceinline GSVector4i sat_u8(const GSVector4i& minmax) const
 	{
-		return max_u8(a.xyxy()).min_u8(a.zwzw());
+		return max_u8(minmax.xyxy()).min_u8(minmax.zwzw());
 	}
 
-	__forceinline GSVector4i sat_u16(const GSVector4i& a, const GSVector4i& b) const
+	__forceinline GSVector4i sat_u16(const GSVector4i& min, const GSVector4i& max) const
 	{
-		return max_u16(a).min_u16(b);
+		return max_u16(min).min_u16(max);
 	}
 
-	__forceinline GSVector4i sat_u16(const GSVector4i& a) const
+	__forceinline GSVector4i sat_u16(const GSVector4i& minmax) const
 	{
-		return max_u16(a.xyxy()).min_u16(a.zwzw());
+		return max_u16(minmax.xyxy()).min_u16(minmax.zwzw());
 	}
 
-	__forceinline GSVector4i sat_u32(const GSVector4i& a, const GSVector4i& b) const
+	__forceinline GSVector4i sat_u32(const GSVector4i& min, const GSVector4i& max) const
 	{
-		return max_u32(a).min_u32(b);
+		return max_u32(min).min_u32(max);
 	}
 
-	__forceinline GSVector4i sat_u32(const GSVector4i& a) const
+	__forceinline GSVector4i sat_u32(const GSVector4i& minmax) const
 	{
-		return max_u32(a.xyxy()).min_u32(a.zwzw());
+		return max_u32(minmax.xyxy()).min_u32(minmax.zwzw());
 	}
 
-	__forceinline GSVector4i min_i8(const GSVector4i& a) const
+	__forceinline GSVector4i min_i8(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_min_epi8(m, a));
+		return GSVector4i(_mm_min_epi8(m, v));
 	}
 
-	__forceinline GSVector4i max_i8(const GSVector4i& a) const
+	__forceinline GSVector4i max_i8(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_max_epi8(m, a));
+		return GSVector4i(_mm_max_epi8(m, v));
 	}
 
-	__forceinline GSVector4i min_i16(const GSVector4i& a) const
+	__forceinline GSVector4i min_i16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_min_epi16(m, a));
+		return GSVector4i(_mm_min_epi16(m, v));
 	}
 
-	__forceinline GSVector4i max_i16(const GSVector4i& a) const
+	__forceinline GSVector4i max_i16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_max_epi16(m, a));
+		return GSVector4i(_mm_max_epi16(m, v));
 	}
 
-	__forceinline GSVector4i min_i32(const GSVector4i& a) const
+	__forceinline GSVector4i min_i32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_min_epi32(m, a));
+		return GSVector4i(_mm_min_epi32(m, v));
 	}
 
-	__forceinline GSVector4i max_i32(const GSVector4i& a) const
+	__forceinline GSVector4i max_i32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_max_epi32(m, a));
+		return GSVector4i(_mm_max_epi32(m, v));
 	}
 
-	__forceinline GSVector4i min_u8(const GSVector4i& a) const
+	__forceinline GSVector4i min_u8(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_min_epu8(m, a));
+		return GSVector4i(_mm_min_epu8(m, v));
 	}
 
-	__forceinline GSVector4i max_u8(const GSVector4i& a) const
+	__forceinline GSVector4i max_u8(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_max_epu8(m, a));
+		return GSVector4i(_mm_max_epu8(m, v));
 	}
 
-	__forceinline GSVector4i min_u16(const GSVector4i& a) const
+	__forceinline GSVector4i min_u16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_min_epu16(m, a));
+		return GSVector4i(_mm_min_epu16(m, v));
 	}
 
-	__forceinline GSVector4i max_u16(const GSVector4i& a) const
+	__forceinline GSVector4i max_u16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_max_epu16(m, a));
+		return GSVector4i(_mm_max_epu16(m, v));
 	}
 
-	__forceinline GSVector4i min_u32(const GSVector4i& a) const
+	__forceinline GSVector4i min_u32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_min_epu32(m, a));
+		return GSVector4i(_mm_min_epu32(m, v));
 	}
 
-	__forceinline GSVector4i max_u32(const GSVector4i& a) const
+	__forceinline GSVector4i max_u32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_max_epu32(m, a));
+		return GSVector4i(_mm_max_epu32(m, v));
 	}
 
-	__forceinline static int min_i16(int a, int b)
+	__forceinline static int min_i16(int min, int max)
 	{
-		return store(load(a).min_i16(load(b)));
+		return store(load(min).min_i16(load(max)));
 	}
 
 	__forceinline GSVector4i clamp8() const
@@ -404,15 +403,15 @@ public:
 		return pu16().upl8();
 	}
 
-	__forceinline GSVector4i blend8(const GSVector4i& a, const GSVector4i& mask) const
+	__forceinline GSVector4i blend8(const GSVector4i& v, const GSVector4i& mask) const
 	{
-		return GSVector4i(_mm_blendv_epi8(m, a, mask));
+		return GSVector4i(_mm_blendv_epi8(m, v, mask));
 	}
 
 	template <int mask>
-	__forceinline GSVector4i blend16(const GSVector4i& a) const
+	__forceinline GSVector4i blend16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_blend_epi16(m, a, mask));
+		return GSVector4i(_mm_blend_epi16(m, v, mask));
 	}
 
 	template <int mask>
@@ -432,36 +431,36 @@ public:
 	/// Equivalent to blend with the given mask broadcasted across the vector
 	/// May be faster than blend in some cases
 	template <u32 mask>
-	__forceinline GSVector4i smartblend(const GSVector4i& a) const
+	__forceinline GSVector4i smartblend(const GSVector4i& v) const
 	{
 		if (mask == 0)
 			return *this;
 		if (mask == 0xffffffff)
-			return a;
+			return v;
 
 		if (mask == 0x0000ffff)
-			return blend16<0x55>(a);
+			return blend16<0x55>(v);
 		if (mask == 0xffff0000)
-			return blend16<0xaa>(a);
+			return blend16<0xaa>(v);
 
 		for (int i = 0; i < 32; i += 8)
 		{
 			u8 byte = (mask >> i) & 0xff;
 			if (byte != 0xff && byte != 0)
-				return blend(a, GSVector4i(mask));
+				return blend(v, GSVector4i(mask));
 		}
 
-		return blend8(a, GSVector4i(mask));
+		return blend8(v, GSVector4i(mask));
 	}
 
-	__forceinline GSVector4i blend(const GSVector4i& a, const GSVector4i& mask) const
+	__forceinline GSVector4i blend(const GSVector4i& v, const GSVector4i& mask) const
 	{
-		return GSVector4i(_mm_or_si128(_mm_andnot_si128(mask, m), _mm_and_si128(mask, a)));
+		return GSVector4i(_mm_or_si128(_mm_andnot_si128(mask, m), _mm_and_si128(mask, v)));
 	}
 
-	__forceinline GSVector4i mix16(const GSVector4i& a) const
+	__forceinline GSVector4i mix16(const GSVector4i& v) const
 	{
-		return blend16<0xaa>(a);
+		return blend16<0xaa>(v);
 	}
 
 	__forceinline GSVector4i shuffle8(const GSVector4i& mask) const
@@ -469,9 +468,9 @@ public:
 		return GSVector4i(_mm_shuffle_epi8(m, mask));
 	}
 
-	__forceinline GSVector4i ps16(const GSVector4i& a) const
+	__forceinline GSVector4i ps16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_packs_epi16(m, a));
+		return GSVector4i(_mm_packs_epi16(m, v));
 	}
 
 	__forceinline GSVector4i ps16() const
@@ -479,9 +478,9 @@ public:
 		return GSVector4i(_mm_packs_epi16(m, m));
 	}
 
-	__forceinline GSVector4i pu16(const GSVector4i& a) const
+	__forceinline GSVector4i pu16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_packus_epi16(m, a));
+		return GSVector4i(_mm_packus_epi16(m, v));
 	}
 
 	__forceinline GSVector4i pu16() const
@@ -489,9 +488,9 @@ public:
 		return GSVector4i(_mm_packus_epi16(m, m));
 	}
 
-	__forceinline GSVector4i ps32(const GSVector4i& a) const
+	__forceinline GSVector4i ps32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_packs_epi32(m, a));
+		return GSVector4i(_mm_packs_epi32(m, v));
 	}
 
 	__forceinline GSVector4i ps32() const
@@ -499,9 +498,9 @@ public:
 		return GSVector4i(_mm_packs_epi32(m, m));
 	}
 
-	__forceinline GSVector4i pu32(const GSVector4i& a) const
+	__forceinline GSVector4i pu32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_packus_epi32(m, a));
+		return GSVector4i(_mm_packus_epi32(m, v));
 	}
 
 	__forceinline GSVector4i pu32() const
@@ -509,44 +508,44 @@ public:
 		return GSVector4i(_mm_packus_epi32(m, m));
 	}
 
-	__forceinline GSVector4i upl8(const GSVector4i& a) const
+	__forceinline GSVector4i upl8(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpacklo_epi8(m, a));
+		return GSVector4i(_mm_unpacklo_epi8(m, v));
 	}
 
-	__forceinline GSVector4i uph8(const GSVector4i& a) const
+	__forceinline GSVector4i uph8(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpackhi_epi8(m, a));
+		return GSVector4i(_mm_unpackhi_epi8(m, v));
 	}
 
-	__forceinline GSVector4i upl16(const GSVector4i& a) const
+	__forceinline GSVector4i upl16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpacklo_epi16(m, a));
+		return GSVector4i(_mm_unpacklo_epi16(m, v));
 	}
 
-	__forceinline GSVector4i uph16(const GSVector4i& a) const
+	__forceinline GSVector4i uph16(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpackhi_epi16(m, a));
+		return GSVector4i(_mm_unpackhi_epi16(m, v));
 	}
 
-	__forceinline GSVector4i upl32(const GSVector4i& a) const
+	__forceinline GSVector4i upl32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpacklo_epi32(m, a));
+		return GSVector4i(_mm_unpacklo_epi32(m, v));
 	}
 
-	__forceinline GSVector4i uph32(const GSVector4i& a) const
+	__forceinline GSVector4i uph32(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpackhi_epi32(m, a));
+		return GSVector4i(_mm_unpackhi_epi32(m, v));
 	}
 
-	__forceinline GSVector4i upl64(const GSVector4i& a) const
+	__forceinline GSVector4i upl64(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpacklo_epi64(m, a));
+		return GSVector4i(_mm_unpacklo_epi64(m, v));
 	}
 
-	__forceinline GSVector4i uph64(const GSVector4i& a) const
+	__forceinline GSVector4i uph64(const GSVector4i& v) const
 	{
-		return GSVector4i(_mm_unpackhi_epi64(m, a));
+		return GSVector4i(_mm_unpackhi_epi64(m, v));
 	}
 
 	__forceinline GSVector4i upl8() const
@@ -926,11 +925,11 @@ public:
 		return d.add16(a.sub16(b).modulate16<shift>(c));
 	}
 
-	__forceinline GSVector4i lerp16_4(const GSVector4i& a, const GSVector4i& f) const
+	__forceinline GSVector4i lerp16_4(const GSVector4i& a_, const GSVector4i& f) const
 	{
 		// (a - this) * f >> 4 + this (a, this: 8-bit, f: 4-bit)
 
-		return add16(a.sub16(*this).mul16l(f).sra16(4));
+		return add16(a_.sub16(*this).mul16l(f).sra16(4));
 	}
 
 	template <int shift>
@@ -1072,10 +1071,10 @@ public:
 	template <int i>
 	__forceinline int extract32() const
 	{
-		if (i == 0)
+		if constexpr (i == 0)
 			return GSVector4i::store(*this);
-
-		return _mm_extract_epi32(m, i);
+		else
+			return _mm_extract_epi32(m, i);
 	}
 
 #ifdef _M_AMD64

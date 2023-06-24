@@ -929,7 +929,7 @@ bool SaveState_ZipToDisk(std::unique_ptr<ArchiveEntryList> srclist, std::unique_
 	zip_error_t ze = {};
 	zip_source_t* zs = zip_source_file_create(filename, 0, 0, &ze);
 	zip_t* zf = nullptr;
-	if (zs && !(zf = zip_open_from_source(zs, ZIP_CREATE | ZIP_TRUNCATE, &ze)))
+	if (zs && (zf = zip_open_from_source(zs, ZIP_CREATE | ZIP_TRUNCATE, &ze)) == nullptr)
 	{
 		Console.Error("Failed to open zip file '%s' for save state: %s", filename, zip_error_strerror(&ze));
 

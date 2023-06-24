@@ -174,11 +174,8 @@ static VirtualMemoryManagerPtr makeMemoryManager(const char* name, const char* f
 	}
 
 	// If the above failed and it's x86-64, recompiled code is going to break!
-	// If it's i386 anything can reach anything so it doesn't matter
-	if (sizeof(void*) == 8)
-	{
-		pxAssertRel(0, "Failed to find a good place for the memory allocation, recompilers may fail");
-	}
+	pxFailRel("Failed to find a good place for the memory allocation, recompilers may fail");
+
 	return std::make_shared<VirtualMemoryManager>(name, file_mapping_name, 0, size);
 }
 

@@ -1617,7 +1617,7 @@ static void iopRecRecompile(const u32 startpc)
 	// go until the next branch
 	i = startpc;
 	s_nEndBlock = 0xffffffff;
-	s_branchTo = -1;
+	s_branchTo = static_cast<u32>(-1);
 
 	while (1)
 	{

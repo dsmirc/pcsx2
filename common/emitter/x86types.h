@@ -212,9 +212,9 @@ namespace x86Emitter
 					return 4;
 				case 8:
 					return 4; // Only mov's take 64-bit immediates
-					jNO_DEFAULT
+				default:
+					return 0;
 			}
-			return 0;
 		}
 
 		void xWriteImm(int imm) const
@@ -230,8 +230,6 @@ namespace x86Emitter
 				case 4:
 					xWrite32(imm);
 					break;
-
-					jNO_DEFAULT
 			}
 		}
 	};

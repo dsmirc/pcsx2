@@ -251,7 +251,7 @@ bool GSDevice12::CreateSwapChain()
 	RECT client_rc{};
 	GetClientRect(window_hwnd, &client_rc);
 
-	DXGI_MODE_DESC fullscreen_mode;
+	DXGI_MODE_DESC fullscreen_mode = {};
 	wil::com_ptr_nothrow<IDXGIOutput> fullscreen_output;
 	if (Host::IsFullscreen())
 	{
@@ -488,8 +488,11 @@ void GSDevice12::ResizeWindow(s32 new_window_width, s32 new_window_height, float
 
 	m_window_info.surface_scale = new_window_scale;
 
-	if (m_window_info.surface_width == new_window_width && m_window_info.surface_height == new_window_height)
+	if (m_window_info.surface_width == static_cast<u32>(new_window_width) &&
+		m_window_info.surface_height == static_cast<u32>(new_window_height))
+	{
 		return;
+	}
 
 	ExecuteCommandList(true);
 
@@ -757,7 +760,7 @@ void GSDevice12::CopyRect(GSTexture* sTex, GSTexture* dTex, const GSVector4i& r,
 				{
 					dTexVK->TransitionToState(D3D12_RESOURCE_STATE_RENDER_TARGET);
 					g_d3d12_context->GetCommandList()->ClearRenderTargetView(
-						dTexVK->GetWriteDescriptor(), sTexVK->GetUNormClearColor().v, 0, nullptr);
+						dTexVK->GetWriteDescriptor(), sTexVK->GetUNormClearColor().F32, 0, nullptr);
 				}
 				else
 				{
@@ -1832,17 +1835,17 @@ bool GSDevice12::CompileConvertPipelines()
 			// compile color copy pipelines
 			gpb.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
 			gpb.SetDepthStencilFormat(DXGI_FORMAT_UNKNOWN);
-			for (u32 i = 0; i < 16; i++)
+			for (u32 j = 0; j < 16; j++)
 			{
-				pxAssert(!m_color_copy[i]);
+				pxAssert(!m_color_copy[j]);
 				gpb.SetBlendState(0, false, D3D12_BLEND_ONE, D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, D3D12_BLEND_ONE,
-					D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, static_cast<u8>(i));
-				m_color_copy[i] = gpb.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
-				if (!m_color_copy[i])
+					D3D12_BLEND_ZERO, D3D12_BLEND_OP_ADD, static_cast<u8>(j));
+				m_color_copy[j] = gpb.Create(g_d3d12_context->GetDevice(), m_shader_cache, false);
+				if (!m_color_copy[j])
 					return false;
 
-				D3D12::SetObjectNameFormatted(m_color_copy[i].get(), "Color copy pipeline (r=%u, g=%u, b=%u, a=%u)",
-					i & 1u, (i >> 1) & 1u, (i >> 2) & 1u, (i >> 3) & 1u);
+				D3D12::SetObjectNameFormatted(m_color_copy[j].get(), "Color copy pipeline (r=%u, g=%u, b=%u, a=%u)",
+					j & 1u, (j >> 1) & 1u, (j >> 2) & 1u, (j >> 3) & 1u);
 			}
 		}
 		else if (i == ShaderConvert::HDR_INIT || i == ShaderConvert::HDR_RESOLVE)
@@ -1904,8 +1907,8 @@ bool GSDevice12::CompilePresentPipelines()
 		return false;
 	}
 
-	ComPtr<ID3DBlob> m_convert_vs = GetUtilityVertexShader(*shader, "vs_main");
-	if (!m_convert_vs)
+	ComPtr<ID3DBlob> convert_vs = GetUtilityVertexShader(*shader, "vs_main");
+	if (!convert_vs)
 		return false;
 
 	D3D12::GraphicsPipelineBuilder gpb;
@@ -1913,7 +1916,7 @@ bool GSDevice12::CompilePresentPipelines()
 	AddUtilityVertexAttributes(gpb);
 	gpb.SetNoCullRasterizationState();
 	gpb.SetNoBlendingState();
-	gpb.SetVertexShader(m_convert_vs.get());
+	gpb.SetVertexShader(convert_vs.get());
 	gpb.SetDepthState(false, false, D3D12_COMPARISON_FUNC_ALWAYS);
 	gpb.SetNoStencilState();
 	gpb.SetRenderTarget(0, DXGI_FORMAT_R8G8B8A8_UNORM);
@@ -2813,7 +2816,7 @@ __ri void GSDevice12::ApplyBaseState(u32 flags, ID3D12GraphicsCommandList* cmdli
 	if (flags & DIRTY_FLAG_BLEND_CONSTANTS)
 	{
 		const GSVector4 col(static_cast<float>(m_blend_constant_color) / 128.0f);
-		cmdlist->OMSetBlendFactor(col.v);
+		cmdlist->OMSetBlendFactor(col.F32);
 	}
 
 	if (flags & DIRTY_FLAG_STENCIL_REF)

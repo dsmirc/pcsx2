@@ -374,7 +374,7 @@ int DisassemblyFunction::getNumLines()
 	return (int) lineAddresses.size();
 }
 
-int DisassemblyFunction::getLineNum(u32 address, bool findStart)
+int DisassemblyFunction::getLineNum(u32 address_, bool findStart)
 {
 	if (findStart)
 	{
@@ -382,10 +382,10 @@ int DisassemblyFunction::getLineNum(u32 address, bool findStart)
 		for (int i = 0; i < last; i++)
 		{
 			u32 next = lineAddresses[i + 1];
-			if (lineAddresses[i] <= address && next > address)
+			if (lineAddresses[i] <= address_ && next > address_)
 				return i;
 		}
-		if (lineAddresses[last] <= address && this->address + this->size > address)
+		if (lineAddresses[last] <= address_ && address + this->size > address_)
 			return last;
 	}
 	else
@@ -393,10 +393,10 @@ int DisassemblyFunction::getLineNum(u32 address, bool findStart)
 		int last = (int)lineAddresses.size() - 1;
 		for (int i = 0; i < last; i++)
 		{
-			if (lineAddresses[i] == address)
+			if (lineAddresses[i] == address_)
 				return i;
 		}
-		if (lineAddresses[last] == address)
+		if (lineAddresses[last] == address_)
 			return last;
 	}
 
@@ -408,18 +408,18 @@ u32 DisassemblyFunction::getLineAddress(int line)
 	return lineAddresses[line];
 }
 
-bool DisassemblyFunction::disassemble(u32 address, DisassemblyLineInfo& dest, bool insertSymbols)
+bool DisassemblyFunction::disassemble(u32 address_, DisassemblyLineInfo& dest, bool insertSymbols)
 {
-	auto it = findDisassemblyEntry(entries,address,false);
+	auto it = findDisassemblyEntry(entries,address_,false);
 	if (it == entries.end())
 		return false;
 
-	return it->second->disassemble(address,dest,insertSymbols);
+	return it->second->disassemble(address_,dest,insertSymbols);
 }
 
-void DisassemblyFunction::getBranchLines(u32 start, u32 size, std::vector<BranchLine>& dest)
+void DisassemblyFunction::getBranchLines(u32 start, u32 size_, std::vector<BranchLine>& dest)
 {
-	u32 end = start+size;
+	u32 end = start+size_;
 
 	for (size_t i = 0; i < lines.size(); i++)
 	{
@@ -695,17 +695,17 @@ void DisassemblyFunction::clear()
 	hash = 0;
 }
 
-bool DisassemblyOpcode::disassemble(u32 address, DisassemblyLineInfo& dest, bool insertSymbols)
+bool DisassemblyOpcode::disassemble(u32 address_, DisassemblyLineInfo& dest, bool insertSymbols)
 {
 	char opcode[64],arguments[256];
 
-	std::string dis = cpu->disasm(address,insertSymbols);
+	std::string dis = cpu->disasm(address_,insertSymbols);
 	parseDisasm(cpu->GetSymbolMap(),dis.c_str(),opcode,arguments,insertSymbols);
 	dest.type = DISTYPE_OPCODE;
 	dest.name = opcode;
 	dest.params = arguments;
 	dest.totalSize = 4;
-	dest.info = MIPSAnalyst::GetOpcodeInfo(cpu,address);
+	dest.info = MIPSAnalyst::GetOpcodeInfo(cpu,address_);
 	return true;
 }
 
@@ -765,11 +765,11 @@ void DisassemblyMacro::setMacroMemory(const std::string& _name, u32 _immediate, 
 	numOpcodes = 2;
 }
 
-bool DisassemblyMacro::disassemble(u32 address, DisassemblyLineInfo& dest, bool insertSymbols)
+bool DisassemblyMacro::disassemble(u32 address_, DisassemblyLineInfo& dest, bool insertSymbols)
 {
 	char buffer[64];
 	dest.type = DISTYPE_MACRO;
-	dest.info = MIPSAnalyst::GetOpcodeInfo(cpu,address);
+	dest.info = MIPSAnalyst::GetOpcodeInfo(cpu,address_);
 
 	std::string addressSymbol;
 	switch (type)
@@ -836,7 +836,7 @@ void DisassemblyData::recheck()
 	}
 }
 
-bool DisassemblyData::disassemble(u32 address, DisassemblyLineInfo& dest, bool insertSymbols)
+bool DisassemblyData::disassemble(u32 address_, DisassemblyLineInfo& dest, bool insertSymbols)
 {
 	dest.type = DISTYPE_DATA;
 
@@ -858,7 +858,7 @@ bool DisassemblyData::disassemble(u32 address, DisassemblyLineInfo& dest, bool i
 		return false;
 	}
 
-	auto it = lines.find(address);
+	auto it = lines.find(address_);
 	if (it == lines.end())
 		return false;
 
@@ -867,9 +867,9 @@ bool DisassemblyData::disassemble(u32 address, DisassemblyLineInfo& dest, bool i
 	return true;
 }
 
-int DisassemblyData::getLineNum(u32 address, bool findStart)
+int DisassemblyData::getLineNum(u32 address_, bool findStart)
 {
-	auto it = lines.upper_bound(address);
+	auto it = lines.upper_bound(address_);
 	if (it != lines.end())
 	{
 		if (it == lines.begin())
@@ -1034,7 +1034,7 @@ DisassemblyComment::DisassemblyComment(DebugInterface* _cpu, u32 _address, u32 _
 
 }
 
-bool DisassemblyComment::disassemble(u32 address, DisassemblyLineInfo& dest, bool insertSymbols)
+bool DisassemblyComment::disassemble(u32 address_, DisassemblyLineInfo& dest, bool insertSymbols)
 {
 	dest.type = DISTYPE_OTHER;
 	dest.name = name;

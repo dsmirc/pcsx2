@@ -307,8 +307,6 @@ static void DynGen_IndirectTlbDispatcher(int mode, int bits, bool sign)
 #endif
 
 	xMOVZX(eax, al);
-	if (wordsize != 8)
-		xSUB(arg1regd, 0x80000000);
 	xSUB(arg1regd, eax);
 
 	// jump to the indirect handler, which is a C++ function.

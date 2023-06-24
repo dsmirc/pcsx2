@@ -278,7 +278,7 @@ bool GzippedFileReader::OkIndex()
 	if (indexfile.empty())
 		return false; // iso2indexname(...) will print errors if it can't apply the template
 
-	if (FileSystem::FileExists(indexfile.c_str()) && (m_pIndex = ReadIndexFromFile(indexfile.c_str())))
+	if (FileSystem::FileExists(indexfile.c_str()) && (m_pIndex = ReadIndexFromFile(indexfile.c_str())) != nullptr)
 	{
 		Console.WriteLn(Color_Green, "OK: Gzip quick access index read from disk: '%s'", indexfile.c_str());
 		if (m_pIndex->span != GZFILE_SPAN_DEFAULT)
@@ -322,7 +322,7 @@ bool GzippedFileReader::Open(std::string fileName)
 {
 	Close();
 	m_filename = std::move(fileName);
-	if (!(m_src = FileSystem::OpenCFile(m_filename.c_str(), "rb")) || !OkIndex())
+	if ((m_src = FileSystem::OpenCFile(m_filename.c_str(), "rb")) == nullptr || !OkIndex())
 	{
 		Close();
 		return false;

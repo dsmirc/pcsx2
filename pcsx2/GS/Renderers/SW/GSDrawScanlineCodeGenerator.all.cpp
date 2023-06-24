@@ -3167,8 +3167,8 @@ void GSDrawScanlineCodeGenerator2::ReadTexelImplYmm(
 {
 	const Ymm dst[] = { d0,   d1,   d2s0, d3s1 };
 	const Ymm src[] = { d2s0, d3s1,   s2,   s3 };
-	const Ymm t1[]  = { d1,   d2s0, d3s1,   s2 };
-	const Ymm t2[]  = { tmp,  tmp,  tmp,  tmp  };
+	const Ymm t1_[] = { d1,   d2s0, d3s1,   s2 };
+	const Ymm t2_[] = { tmp,  tmp,  tmp,  tmp  };
 
 	bool texInRBX = false;
 	if (use_lod && m_sel.lcm)
@@ -3181,8 +3181,8 @@ void GSDrawScanlineCodeGenerator2::ReadTexelImplYmm(
 	{
 		const Xmm xdst{dst[i].getIdx()};
 		const Xmm xsrc{src[i].getIdx()};
-		const Xmm xt1{t1[i].getIdx()};
-		const Xmm xt2{t2[i].getIdx()};
+		const Xmm xt1{t1_[i].getIdx()};
+		const Xmm xt2{t2_[i].getIdx()};
 
 		if (use_lod && !m_sel.lcm)
 		{
@@ -3208,8 +3208,8 @@ void GSDrawScanlineCodeGenerator2::ReadTexelImplYmm(
 			AddressReg tex = texInRBX ? rbx : _m_local__gd__tex;
 			if (!m_sel.tlu)
 			{
-				pcmpeqd(t1[i], t1[i]);
-				vpgatherdd(dst[i], ptr[tex + src[i] * 4], t1[i]);
+				pcmpeqd(t1_[i], t1_[i]);
+				vpgatherdd(dst[i], ptr[tex + src[i] * 4], t1_[i]);
 			}
 			else
 			{
@@ -3261,7 +3261,6 @@ void GSDrawScanlineCodeGenerator2::ReadTexelImplSSE4(
 	}
 	else
 	{
-		bool preserve = false;
 		bool texInRBX = false;
 
 		if (use_lod && m_sel.lcm)
@@ -3274,7 +3273,7 @@ void GSDrawScanlineCodeGenerator2::ReadTexelImplSSE4(
 		{
 			for (int j = 0; j < 4; j++)
 			{
-				ReadTexelImpl(dst[i], src[i], j, texInRBX, preserve);
+				ReadTexelImpl(dst[i], src[i], j, texInRBX, false);
 			}
 		}
 	}

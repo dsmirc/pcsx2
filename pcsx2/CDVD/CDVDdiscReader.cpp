@@ -67,7 +67,7 @@ void cdvdParseTOC()
 {
 	tracks[1].start_lba = 0;
 
-	if (!src->GetSectorCount())
+	if (!g_ioctl_src->GetSectorCount())
 	{
 		curDiskType = CDVD_TYPE_NODISC;
 		strack = 1;
@@ -75,7 +75,7 @@ void cdvdParseTOC()
 		return;
 	}
 
-	if (src->GetMediaType() >= 0)
+	if (g_ioctl_src->GetMediaType() >= 0)
 	{
 		tracks[1].type = CDVD_MODE1_TRACK;
 
@@ -87,7 +87,7 @@ void cdvdParseTOC()
 	strack = 0xFF;
 	etrack = 0;
 
-	for (auto& entry : src->ReadTOC())
+	for (auto& entry : g_ioctl_src->ReadTOC())
 	{
 		if (entry.track < 1 || entry.track > 99)
 			continue;
@@ -98,7 +98,7 @@ void cdvdParseTOC()
 		{
 			std::array<u8, 2352> buffer;
 			// Byte 15 of a raw CD data sector determines the track mode
-			if (src->ReadSectors2352(entry.lba, 1, buffer.data()) && (buffer[15] & 3) == 2)
+			if (g_ioctl_src->ReadSectors2352(entry.lba, 1, buffer.data()) && (buffer[15] & 3) == 2)
 			{
 				tracks[entry.track].type = CDVD_MODE2_TRACK;
 			}
@@ -123,7 +123,7 @@ std::atomic<bool> s_keepalive_is_open;
 bool disc_has_changed = false;
 bool weAreInNewDiskCB = false;
 
-std::unique_ptr<IOCtlSrc> src;
+std::unique_ptr<IOCtlSrc> g_ioctl_src;
 
 extern u32 g_last_sector_block_lsn;
 
@@ -142,10 +142,10 @@ void keepAliveThread()
 	{
 
 		//printf(" * keepAliveThread: polling drive.\n");
-		if (src->GetMediaType() >= 0)
-			src->ReadSectors2048(g_last_sector_block_lsn, 1, throwaway);
+		if (g_ioctl_src->GetMediaType() >= 0)
+			g_ioctl_src->ReadSectors2048(g_last_sector_block_lsn, 1, throwaway);
 		else
-			src->ReadSectors2352(g_last_sector_block_lsn, 1, throwaway);
+			g_ioctl_src->ReadSectors2352(g_last_sector_block_lsn, 1, throwaway);
 	}
 
 	printf(" * CDVD: KeepAlive thread finished.\n");
@@ -192,7 +192,7 @@ s32 CALLBACK DISCopen(const char* pTitle)
 	// open device file
 	try
 	{
-		src = std::unique_ptr<IOCtlSrc>(new IOCtlSrc(drive));
+		g_ioctl_src = std::unique_ptr<IOCtlSrc>(new IOCtlSrc(drive));
 	}
 	catch (std::runtime_error&)
 	{
@@ -202,7 +202,7 @@ s32 CALLBACK DISCopen(const char* pTitle)
 	//setup threading manager
 	if (!cdvdStartThread())
 	{
-		src.reset();
+		g_ioctl_src.reset();
 		return -1;
 	}
 	StartKeepAliveThread();
@@ -215,7 +215,7 @@ void CALLBACK DISCclose()
 	StopKeepAliveThread();
 	cdvdStopThread();
 	//close device
-	src.reset();
+	g_ioctl_src.reset();
 }
 
 s32 CALLBACK DISCreadTrack(u32 lsn, int mode)
@@ -242,7 +242,7 @@ s32 CALLBACK DISCgetBuffer(u8* dest)
 	// from hanging (All-Star Baseball 2005, Hello Kitty: Roller Rescue,
 	// Hot Wheels: Beat That! (NTSC), Ratchet & Clank 3 (PAL),
 	// Test Drive: Eve of Destruction, etc.).
-	if (csector >= src->GetSectorCount())
+	if (csector >= g_ioctl_src->GetSectorCount())
 		return 0;
 
 	int csize = 2352;
@@ -276,7 +276,7 @@ s32 CALLBACK DISCreadSubQ(u32 lsn, cdvdSubQ* subq)
 {
 	// the formatted subq command returns:  control/adr, track, index, trk min, trk sec, trk frm, 0x00, abs min, abs sec, abs frm
 
-	if (lsn >= src->GetSectorCount())
+	if (lsn >= g_ioctl_src->GetSectorCount())
 		return -1;
 
 	memset(subq, 0, sizeof(cdvdSubQ));
@@ -310,11 +310,11 @@ s32 CALLBACK DISCgetTD(u8 Track, cdvdTD* Buffer)
 {
 	if (Track == 0)
 	{
-		if (src == nullptr)
+		if (g_ioctl_src == nullptr)
 			return -1;
 		try
 		{
-			Buffer->lsn = src->GetSectorCount();
+			Buffer->lsn = g_ioctl_src->GetSectorCount();
 			Buffer->type = 0;
 			return 0;
 		}
@@ -344,7 +344,7 @@ s32 CALLBACK DISCgetTOC(void* toc)
 	{
 		memset(tocBuff, 0, 2048);
 
-		s32 mt = src->GetMediaType();
+		s32 mt = g_ioctl_src->GetMediaType();
 
 		if (mt < 0)
 			return -1;
@@ -385,7 +385,7 @@ s32 CALLBACK DISCgetTOC(void* toc)
 		}
 		else if (mt == 1)
 		{ //PTP
-			const s32 layer1start = src->GetLayerBreakAddress() + 0x30000;
+			const s32 layer1start = g_ioctl_src->GetLayerBreakAddress() + 0x30000;
 
 			// dual sided
 			tocBuff[0] = 0x24;
@@ -414,7 +414,7 @@ s32 CALLBACK DISCgetTOC(void* toc)
 		}
 		else
 		{ //OTP
-			const s32 layer1start = src->GetLayerBreakAddress() + 0x30000;
+			const s32 layer1start = g_ioctl_src->GetLayerBreakAddress() + 0x30000;
 
 			// dual sided
 			tocBuff[0] = 0x24;
@@ -531,17 +531,17 @@ s32 CALLBACK DISCreadSector(u8* buffer, u32 lsn, int mode)
 
 s32 CALLBACK DISCgetDualInfo(s32* dualType, u32* _layer1start)
 {
-	if (src == nullptr)
+	if (g_ioctl_src == nullptr)
 		return -1;
-	switch (src->GetMediaType())
+	switch (g_ioctl_src->GetMediaType())
 	{
 		case 1:
 			*dualType = 1;
-			*_layer1start = src->GetLayerBreakAddress() + 1;
+			*_layer1start = g_ioctl_src->GetLayerBreakAddress() + 1;
 			return 0;
 		case 2:
 			*dualType = 2;
-			*_layer1start = src->GetLayerBreakAddress() + 1;
+			*_layer1start = g_ioctl_src->GetLayerBreakAddress() + 1;
 			return 0;
 		case 0:
 			*dualType = 0;

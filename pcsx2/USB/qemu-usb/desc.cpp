@@ -260,16 +260,16 @@ int usb_desc_endpoint(const USBDescEndpoint& ep, int flags,
 
 	if (superlen)
 	{
-		USBDescriptor* d = (USBDescriptor*)(dest + bLength);
+		USBDescriptor* nd = (USBDescriptor*)(dest + bLength);
 
-		d->bLength = 0x06;
-		d->bDescriptorType = USB_DT_ENDPOINT_COMPANION;
+		nd->bLength = 0x06;
+		nd->bDescriptorType = USB_DT_ENDPOINT_COMPANION;
 
-		d->u.super_endpoint.bMaxBurst = ep.bMaxBurst;
-		d->u.super_endpoint.bmAttributes = ep.bmAttributes_super;
-		d->u.super_endpoint.wBytesPerInterval_lo =
+		nd->u.super_endpoint.bMaxBurst = ep.bMaxBurst;
+		nd->u.super_endpoint.bmAttributes = ep.bmAttributes_super;
+		nd->u.super_endpoint.wBytesPerInterval_lo =
 			usb_lo(ep.wBytesPerInterval);
-		d->u.super_endpoint.wBytesPerInterval_hi =
+		nd->u.super_endpoint.wBytesPerInterval_hi =
 			usb_hi(ep.wBytesPerInterval);
 	}
 
@@ -629,8 +629,6 @@ int usb_desc_set_interface(USBDevice* dev, int index, int value)
 //static
 int usb_desc_set_config(USBDevice* dev, int value)
 {
-	int i;
-
 	if (value == 0)
 	{
 		dev->configuration = 0;
@@ -654,6 +652,7 @@ int usb_desc_set_config(USBDevice* dev, int value)
 		}*/
 	}
 
+	int i;
 	for (i = 0; i < dev->ninterfaces; i++)
 	{
 		usb_desc_set_interface(dev, i, 0);

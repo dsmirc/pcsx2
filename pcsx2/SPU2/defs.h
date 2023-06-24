@@ -479,7 +479,7 @@ struct V_Core
 
 	// uninitialized constructor
 	V_Core()
-		: Index(-1)
+		: Index(static_cast<u32>(-1))
 		, DMAPtr(nullptr)
 	{
 	}

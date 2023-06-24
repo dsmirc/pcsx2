@@ -396,7 +396,5 @@ bool hwDmacSrcChain(DMACh& dma, int id)
 		default:
 			return true;
 	}
-
-	return false;
 }
 

@@ -665,7 +665,7 @@ void CpuWidget::onSearchButtonClicked()
 
 	const QString searchValue = m_ui.txtSearchValue->text();
 
-	unsigned long long value;
+	unsigned long long value = 0;
 
 	if (searchType < 4)
 	{

@@ -152,16 +152,16 @@ bool ElfObject::hasValidPSXHeader()
 	if (data.GetSizeInBytes() < static_cast<s64>(sizeof(PSXEXEHeader)))
 		return false;
 
-	const PSXEXEHeader* header = reinterpret_cast<const PSXEXEHeader*>(data.GetPtr());
+	const PSXEXEHeader* psx_header = reinterpret_cast<const PSXEXEHeader*>(data.GetPtr());
 
 	static constexpr char expected_id[] = {'P', 'S', '-', 'X', ' ', 'E', 'X', 'E'};
-	if (std::memcmp(header->id, expected_id, sizeof(expected_id)) != 0)
+	if (std::memcmp(psx_header->id, expected_id, sizeof(expected_id)) != 0)
 		return false;
 
-	if (static_cast<s64>(header->file_size + sizeof(PSXEXEHeader)) > data.GetSizeInBytes())
+	if (static_cast<s64>(psx_header->file_size + sizeof(PSXEXEHeader)) > data.GetSizeInBytes())
 	{
 		Console.Warning("Incorrect file size in PS-EXE header: %u bytes should not be greater than %u bytes",
-			header->file_size, static_cast<unsigned>(data.GetSizeInBytes() - sizeof(PSXEXEHeader)));
+			psx_header->file_size, static_cast<unsigned>(data.GetSizeInBytes() - sizeof(PSXEXEHeader)));
 	}
 
 	return true;
