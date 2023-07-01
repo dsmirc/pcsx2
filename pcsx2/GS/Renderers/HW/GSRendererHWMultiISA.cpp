@@ -45,7 +45,7 @@ bool GSRendererHWFunctions::SwPrimRender(GSRendererHW& hw, bool invalidate_tc, b
 	GSVertexTrace& vt = hw.m_vt;
 	const GIFRegPRIM* PRIM = hw.PRIM;
 	const GSDrawingContext* context = hw.m_context;
-	const GSDrawingEnvironment& env = *hw.m_draw_env;
+	const GSDrawingEnvironmentRegs& env = *hw.m_draw_env;
 	const GS_PRIM_CLASS primclass = vt.m_primclass;
 
 	GSRasterizerData data;

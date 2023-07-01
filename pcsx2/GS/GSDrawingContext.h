@@ -20,7 +20,7 @@
 
 #include "GSLocalMemory.h"
 
-class alignas(32) GSDrawingContext
+class alignas(16) GSDrawingContext
 {
 public:
 	GIFRegXYOFFSET XYOFFSET;
@@ -49,8 +49,6 @@ public:
 		GSOffset zb;
 		GSPixelOffset4* fzb4;
 	} offset;
-
-	GSDrawingContext();
 
 	void Reset();
 

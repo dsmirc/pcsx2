@@ -15,7 +15,7 @@
 
 #pragma once
 
-class alignas(32) GSDrawingEnvironment
+class GSDrawingEnvironmentRegs
 {
 public:
 	GIFRegPRIM       PRIM;
@@ -29,37 +29,6 @@ public:
 	GIFRegDTHE       DTHE;
 	GIFRegCOLCLAMP   COLCLAMP;
 	GIFRegPABE       PABE;
-	GIFRegBITBLTBUF  BITBLTBUF;
-	GIFRegTRXDIR     TRXDIR;
-	GIFRegTRXPOS     TRXPOS;
-	GIFRegTRXREG     TRXREG;
-	GSDrawingContext CTXT[2];
-
-	GSDrawingEnvironment()
-	{
-	}
-
-	void Reset()
-	{
-		memset(&PRIM, 0, sizeof(PRIM));
-		memset(&PRMODE, 0, sizeof(PRMODE));
-		memset(&PRMODECONT, 0, sizeof(PRMODECONT));
-		memset(&TEXCLUT, 0, sizeof(TEXCLUT));
-		memset(&SCANMSK, 0, sizeof(SCANMSK));
-		memset(&TEXA, 0, sizeof(TEXA));
-		memset(&FOGCOL, 0, sizeof(FOGCOL));
-		memset(&DIMX, 0, sizeof(DIMX));
-		memset(&DTHE, 0, sizeof(DTHE));
-		memset(&COLCLAMP, 0, sizeof(COLCLAMP));
-		memset(&PABE, 0, sizeof(PABE));
-		memset(&BITBLTBUF, 0, sizeof(BITBLTBUF));
-		memset(&TRXDIR, 0, sizeof(TRXDIR));
-		memset(&TRXPOS, 0, sizeof(TRXPOS));
-		memset(&TRXREG, 0, sizeof(TRXREG));
-
-		CTXT[0].Reset();
-		CTXT[1].Reset();
-	}
 
 	void Dump(const std::string& filename) const
 	{
@@ -149,33 +118,38 @@ public:
 		            "\tPABE:%u\n\n"
 		        , PABE.PABE);
 
-		fprintf(fp, "BITBLTBUF\n"
-		            "\tSBW:%u\n"
-		            "\tSBP:0x%x\n"
-		            "\tSPSM:%u\n"
-		            "\tDBW:%u\n"
-		            "\tDPSM:%u\n"
-		            "\tDBP:0x%x\n\n"
-		        , BITBLTBUF.SBW, BITBLTBUF.SBP, BITBLTBUF.SPSM, BITBLTBUF.DBW, BITBLTBUF.DPSM, BITBLTBUF.DBP);
-
-		fprintf(fp, "TRXDIR\n"
-		            "\tXDIR:%u\n\n",
-		        TRXDIR.XDIR);
-
-		fprintf(fp, "TRXPOS\n"
-		            "\tDIRY:%u\n"
-		            "\tSSAY:%u\n"
-		            "\tSSAX:%u\n"
-		            "\tDIRX:%u\n"
-		            "\tDSAX:%u\n"
-		            "\tDSAY:%u\n\n"
-		        , TRXPOS.DIRY, TRXPOS.SSAY, TRXPOS.SSAX, TRXPOS.DIRX, TRXPOS.DSAX, TRXPOS.DSAY);
-
-		fprintf(fp, "TRXREG\n"
-		            "\tRRH:%u\n"
-		            "\tRRW:%u\n\n"
-		        , TRXREG.RRH, TRXREG.RRW);
-
 		fclose(fp);
+	}
+};
+
+class GSDrawingEnvironment : public GSDrawingEnvironmentRegs
+{
+public:
+	GIFRegBITBLTBUF  BITBLTBUF;
+	GIFRegTRXDIR     TRXDIR;
+	GIFRegTRXPOS     TRXPOS;
+	GIFRegTRXREG     TRXREG;
+	GSDrawingContext CTXT[2];
+
+	void Reset()
+	{
+		memset(&PRIM, 0, sizeof(PRIM));
+		memset(&PRMODE, 0, sizeof(PRMODE));
+		memset(&PRMODECONT, 0, sizeof(PRMODECONT));
+		memset(&TEXCLUT, 0, sizeof(TEXCLUT));
+		memset(&SCANMSK, 0, sizeof(SCANMSK));
+		memset(&TEXA, 0, sizeof(TEXA));
+		memset(&FOGCOL, 0, sizeof(FOGCOL));
+		memset(&DIMX, 0, sizeof(DIMX));
+		memset(&DTHE, 0, sizeof(DTHE));
+		memset(&COLCLAMP, 0, sizeof(COLCLAMP));
+		memset(&PABE, 0, sizeof(PABE));
+		memset(&BITBLTBUF, 0, sizeof(BITBLTBUF));
+		memset(&TRXDIR, 0, sizeof(TRXDIR));
+		memset(&TRXPOS, 0, sizeof(TRXPOS));
+		memset(&TRXREG, 0, sizeof(TRXREG));
+
+		CTXT[0].Reset();
+		CTXT[1].Reset();
 	}
 };

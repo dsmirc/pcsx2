@@ -938,7 +938,7 @@ bool GSRendererSW::GetScanlineGlobalData(SharedData* data)
 {
 	GSScanlineGlobalData& gd = data->global;
 
-	const GSDrawingEnvironment& env = *m_draw_env;
+	const GSDrawingEnvironmentRegs& env = *m_draw_env;
 	const GSDrawingContext* context = m_context;
 	const GS_PRIM_CLASS primclass = m_vt.m_primclass;
 

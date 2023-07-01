@@ -893,7 +893,7 @@ void GSState::ApplyTEX0(GIFRegTEX0& TEX0)
 	constexpr u64 mask = 0x1f78001fffffffffull; // TBP0 TBW PSM TW TH TCC TFX CPSM CSA
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if ((m_prev_env.CTXT[i].TEX0.U64 ^ m_env.CTXT[i].TEX0.U64) & mask)
+		if ((m_prev_ctx.TEX0.U64 ^ m_env.CTXT[i].TEX0.U64) & mask)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_TEX0);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_TEX0);
@@ -965,7 +965,7 @@ void GSState::GIFRegHandlerTEX0(const GIFReg* RESTRICT r)
 
 		if (i == m_prev_env.PRIM.CTXT)
 		{
-			if (m_prev_env.CTXT[i].MIPTBP1.U64 ^ mip_tbp1.U64)
+			if (m_prev_ctx.MIPTBP1.U64 ^ mip_tbp1.U64)
 				m_dirty_gs_regs |= (1 << DIRTY_REG_MIPTBP1);
 			else
 				m_dirty_gs_regs &= ~(1 << DIRTY_REG_MIPTBP1);
@@ -984,7 +984,7 @@ void GSState::GIFRegHandlerCLAMP(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].CLAMP.U64 ^ m_env.CTXT[i].CLAMP.U64)
+		if (m_prev_ctx.CLAMP.U64 ^ m_env.CTXT[i].CLAMP.U64)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_CLAMP);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_CLAMP);
@@ -1009,7 +1009,7 @@ void GSState::GIFRegHandlerTEX1(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].TEX1.U64 ^ m_env.CTXT[i].TEX1.U64)
+		if (m_prev_ctx.TEX1.U64 ^ m_env.CTXT[i].TEX1.U64)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_TEX1);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_TEX1);
@@ -1045,7 +1045,7 @@ void GSState::GIFRegHandlerXYOFFSET(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].XYOFFSET.U64 != r_masked)
+		if (m_prev_ctx.XYOFFSET.U64 != r_masked)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_XYOFFSET);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_XYOFFSET);
@@ -1117,7 +1117,7 @@ void GSState::GIFRegHandlerMIPTBP1(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].MIPTBP1.U64 != m_env.CTXT[i].MIPTBP1.U64)
+		if (m_prev_ctx.MIPTBP1.U64 != m_env.CTXT[i].MIPTBP1.U64)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_MIPTBP1);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_MIPTBP1);
@@ -1133,7 +1133,7 @@ void GSState::GIFRegHandlerMIPTBP2(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].MIPTBP2.U64 != m_env.CTXT[i].MIPTBP2.U64)
+		if (m_prev_ctx.MIPTBP2.U64 != m_env.CTXT[i].MIPTBP2.U64)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_MIPTBP2);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_MIPTBP2);
@@ -1175,7 +1175,7 @@ void GSState::GIFRegHandlerSCISSOR(const GIFReg* RESTRICT r)
 {
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].SCISSOR.U64 != r->SCISSOR.U64)
+		if (m_prev_ctx.SCISSOR.U64 != r->SCISSOR.U64)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_SCISSOR);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_SCISSOR);
@@ -1206,7 +1206,7 @@ void GSState::GIFRegHandlerALPHA(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].ALPHA.U64 != m_env.CTXT[i].ALPHA.U64)
+		if (m_prev_ctx.ALPHA.U64 != m_env.CTXT[i].ALPHA.U64)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_ALPHA);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_ALPHA);
@@ -1250,7 +1250,7 @@ void GSState::GIFRegHandlerTEST(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].TEST != m_env.CTXT[i].TEST)
+		if (m_prev_ctx.TEST != m_env.CTXT[i].TEST)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_TEST);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_TEST);
@@ -1274,7 +1274,7 @@ void GSState::GIFRegHandlerFBA(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].FBA != m_env.CTXT[i].FBA)
+		if (m_prev_ctx.FBA != m_env.CTXT[i].FBA)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_FBA);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_FBA);
@@ -1328,7 +1328,7 @@ void GSState::GIFRegHandlerFRAME(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].FRAME != m_env.CTXT[i].FRAME)
+		if (m_prev_ctx.FRAME != m_env.CTXT[i].FRAME)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_FRAME);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_FRAME);
@@ -1363,7 +1363,7 @@ void GSState::GIFRegHandlerZBUF(const GIFReg* RESTRICT r)
 
 	if (i == m_prev_env.PRIM.CTXT)
 	{
-		if (m_prev_env.CTXT[i].ZBUF != m_env.CTXT[i].ZBUF)
+		if (m_prev_ctx.ZBUF != m_env.CTXT[i].ZBUF)
 			m_dirty_gs_regs |= (1 << DIRTY_REG_ZBUF);
 		else
 			m_dirty_gs_regs &= ~(1 << DIRTY_REG_ZBUF);
@@ -1455,16 +1455,15 @@ void GSState::Flush(GSFlushReason reason)
 
 		if (m_dirty_gs_regs)
 		{
-			m_draw_env = &m_prev_env;
 			PRIM = &m_prev_env.PRIM;
-			UpdateContext();
+			m_draw_env = &m_prev_env;
+			m_context = &m_prev_ctx;
 
 			FlushPrim();
 
-			m_draw_env = &m_env;
 			PRIM = &m_env.PRIM;
-			UpdateContext();
-
+			m_draw_env = &m_env;
+			m_context = &m_env.CTXT[m_env.PRIM.CTXT];
 			m_backed_up_ctx = -1;
 		}
 		else
@@ -1720,7 +1719,7 @@ void GSState::Write(const u8* mem, int len)
 
 	if (m_tr.end == 0)
 	{
-		const GSDrawingContext& prev_ctx = m_prev_env.CTXT[m_prev_env.PRIM.CTXT];
+		const GSDrawingContext& prev_ctx = m_prev_ctx;
 		const u32 write_start_bp = m_mem.m_psm[blit.DPSM].info.bn(m_env.TRXPOS.DSAX, m_env.TRXPOS.DSAY, blit.DBP, blit.DBW);
 		const u32 write_end_bp = m_mem.m_psm[blit.DPSM].info.bn(m_env.TRXPOS.DSAX + w - 1, m_env.TRXPOS.DSAY + h - 1, blit.DBP, blit.DBW);
 
@@ -1928,7 +1927,7 @@ void GSState::Move()
 	const GSOffset spo = m_mem.GetOffset(sbp, sbw, m_env.BITBLTBUF.SPSM);
 	const GSOffset dpo = m_mem.GetOffset(dbp, dbw, m_env.BITBLTBUF.DPSM);
 
-	const GSDrawingContext& prev_ctx = m_prev_env.CTXT[m_prev_env.PRIM.CTXT];
+	const GSDrawingContext& prev_ctx = m_prev_ctx;
 	const u32 write_start_bp = m_mem.m_psm[m_env.BITBLTBUF.DPSM].info.bn(m_env.TRXPOS.DSAX, m_env.TRXPOS.DSAY, dbp, dbw);
 	const u32 write_end_bp = m_mem.m_psm[m_env.BITBLTBUF.DPSM].info.bn(m_env.TRXPOS.DSAX + w - 1, m_env.TRXPOS.DSAY + h - 1, dbp, dbw);
 
@@ -2644,12 +2643,7 @@ void GSState::UpdateCRCHacks()
 
 void GSState::UpdateContext()
 {
-	const bool ctx_switch = (m_context != &m_draw_env->CTXT[PRIM->CTXT]);
-
-	if (ctx_switch)
-		GL_REG("Context Switch %d", PRIM->CTXT);
-
-	m_context = const_cast<GSDrawingContext*>(&m_draw_env->CTXT[PRIM->CTXT]);
+	m_context = const_cast<GSDrawingContext*>(&m_env.CTXT[PRIM->CTXT]);
 
 	UpdateScissor();
 }
@@ -3277,11 +3271,11 @@ __forceinline void GSState::VertexKick(u32 skip)
 
 	if (m_index.tail == 0 && ((m_backed_up_ctx != m_env.PRIM.CTXT) || m_dirty_gs_regs))
 	{
+		static_assert(sizeof(GSDrawingEnvironmentRegs) == 88);
+
 		const int ctx = m_env.PRIM.CTXT;
-		std::memcpy(&m_prev_env, &m_env, 88);
-		std::memcpy(&m_prev_env.CTXT[ctx], &m_env.CTXT[ctx], 96);
-		std::memcpy(&m_prev_env.CTXT[ctx].offset, &m_env.CTXT[ctx].offset, sizeof(m_env.CTXT[ctx].offset));
-		std::memcpy(&m_prev_env.CTXT[ctx].scissor, &m_env.CTXT[ctx].scissor, sizeof(m_env.CTXT[ctx].scissor));
+		std::memcpy(&m_prev_env, &m_env, sizeof(GSDrawingEnvironmentRegs));
+		std::memcpy(&m_prev_ctx, &m_env.CTXT[ctx], sizeof(GSDrawingContext));
 		m_dirty_gs_regs = 0;
 		m_backed_up_ctx = m_env.PRIM.CTXT;
 	}
@@ -3685,7 +3679,7 @@ void GSState::CalcAlphaMinMax()
 		GSVector4i a = m_vt.m_min.c.uph32(m_vt.m_max.c).zzww();
 		if (PRIM->TME && context->TEX0.TCC)
 		{
-			const GSDrawingEnvironment& env = *m_draw_env;
+			const GSDrawingEnvironmentRegs& env = *m_draw_env;
 
 			switch (GSLocalMemory::m_psm[context->TEX0.PSM].fmt)
 			{

@@ -79,13 +79,6 @@ static int extend(int uv, int size)
 	return size;
 }
 
-GSDrawingContext::GSDrawingContext()
-{
-	std::memset(&offset, 0, sizeof(offset));
-
-	Reset();
-}
-
 void GSDrawingContext::Reset()
 {
 	std::memset(&XYOFFSET, 0, sizeof(XYOFFSET));
@@ -100,6 +93,9 @@ void GSDrawingContext::Reset()
 	std::memset(&FBA, 0, sizeof(FBA));
 	std::memset(&FRAME, 0, sizeof(FRAME));
 	std::memset(&ZBUF, 0, sizeof(ZBUF));
+
+	UpdateScissor();
+	std::memset(&offset, 0, sizeof(offset));
 }
 
 void GSDrawingContext::UpdateScissor()

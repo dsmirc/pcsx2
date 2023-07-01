@@ -813,7 +813,7 @@ bool GSRendererHW::IsSplitTextureShuffle()
 
 	// Make sure nothing unexpected has changed.
 	// Twinsanity seems to screw with ZBUF here despite it being irrelevant.
-	const GSDrawingContext& next_ctx = m_env.CTXT[m_backed_up_ctx];
+	const GSDrawingContext& next_ctx = m_env.CTXT[m_env.PRIM.CTXT];
 	if (((m_context->TEX0.U64 ^ next_ctx.TEX0.U64) & (~0x3FFF)) != 0 ||
 		m_context->TEX1.U64 != next_ctx.TEX1.U64 ||
 		m_context->CLAMP.U64 != next_ctx.CLAMP.U64 ||
@@ -1078,7 +1078,7 @@ bool GSRendererHW::CheckNextDrawForSplitClear(const GSVector4i& r, u32* pages_co
 		return false;
 
 	// next FBP should point to the end of the rect
-	const GSDrawingContext& next_ctx = m_env.CTXT[m_backed_up_ctx];
+	const GSDrawingContext& next_ctx = m_env.CTXT[m_env.PRIM.CTXT];
 	if (next_ctx.FRAME.Block() != ((end_block + 1) % MAX_BLOCKS) ||
 		m_context->TEX0.U64 != next_ctx.TEX0.U64 ||
 		m_context->TEX1.U64 != next_ctx.TEX1.U64 || m_context->CLAMP.U64 != next_ctx.CLAMP.U64 ||
@@ -1700,7 +1700,7 @@ void GSRendererHW::Draw()
 	const u32 fm_mask = GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmsk;
 
 	// Note required to compute TryAlphaTest below. So do it now.
-	const GSDrawingEnvironment& env = *m_draw_env;
+	const GSDrawingEnvironmentRegs& env = *m_draw_env;
 	const GSLocalMemory::psm_t& tex_psm = GSLocalMemory::m_psm[context->TEX0.PSM];
 	if (PRIM->TME && tex_psm.pal > 0)
 		m_mem.m_clut.Read32(m_cached_ctx.TEX0, env.TEXA);
@@ -4517,7 +4517,7 @@ __ri void GSRendererHW::DrawPrims(GSTextureCache::Target* rt, GSTextureCache::Ta
 		area_out.x, area_out.y, area_out.z, area_out.w);
 #endif
 
-	const GSDrawingEnvironment& env = *m_draw_env;
+	const GSDrawingEnvironmentRegs& env = *m_draw_env;
 	const bool DATE = m_cached_ctx.TEST.DATE && m_cached_ctx.FRAME.PSM != PSMCT24;
 	bool DATE_PRIMID = false;
 	bool DATE_BARRIER = false;

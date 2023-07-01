@@ -216,9 +216,10 @@ public:
 	const GIFRegPRIM* PRIM = nullptr;
 	GSPrivRegSet* m_regs = nullptr;
 	GSLocalMemory m_mem;
-	GSDrawingEnvironment m_env = {};
-	GSDrawingEnvironment m_prev_env = {};
-	const GSDrawingEnvironment* m_draw_env = &m_env;
+	alignas(16) GSDrawingEnvironment m_env = {};
+	alignas(16) GSDrawingEnvironmentRegs m_prev_env = {};
+	alignas(16) GSDrawingContext m_prev_ctx = {};
+	const GSDrawingEnvironmentRegs* m_draw_env = &m_env;
 	GSDrawingContext* m_context = nullptr;
 	GSVector4i temp_draw_rect = {};
 	u32 m_crc = 0;
