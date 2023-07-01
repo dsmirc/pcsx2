@@ -337,13 +337,14 @@ void GSRendererSW::Draw()
 
 	auto data = m_vertex_heap.make_shared<SharedData>().cast<GSRasterizerData>();
 	SharedData* sd = static_cast<SharedData*>(data.get());
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 
 	sd->primclass = m_vt.m_primclass;
-	sd->buff = (u8*)m_vertex_heap.alloc(sizeof(GSVertexSW) * ((m_vertex.next + 1) & ~1) + sizeof(u32) * m_index.tail, 64);
+	sd->buff = (u8*)m_vertex_heap.alloc(sizeof(GSVertexSW) * ((dbuf.vtx_next + 1) & ~1) + sizeof(u32) * dbuf.idx_tail, 64);
 	sd->vertex = (GSVertexSW*)sd->buff;
-	sd->vertex_count = m_vertex.next;
-	sd->index = (u16*)(sd->buff + sizeof(GSVertexSW) * ((m_vertex.next + 1) & ~1));
-	sd->index_count = m_index.tail;
+	sd->vertex_count = dbuf.vtx_next;
+	sd->index = (u16*)(sd->buff + sizeof(GSVertexSW) * ((dbuf.vtx_next + 1) & ~1));
+	sd->index_count = dbuf.idx_tail;
 	sd->scanmsk_value = m_draw_env->SCANMSK.MSK;
 
 	// skip per pixel division if q is constant.
@@ -351,9 +352,9 @@ void GSRendererSW::Draw()
 	// If you have both GS_SPRITE_CLASS && m_vt.m_eq.q, it will depends on the first part of the 'OR'
 	u32 q_div = !IsMipMapActive() && ((m_vt.m_eq.q && m_vt.m_min.t.z != 1.0f) || (!m_vt.m_eq.q && m_vt.m_primclass == GS_SPRITE_CLASS));
 
-	GSVertexSW::s_cvb[m_vt.m_primclass][PRIM->TME][PRIM->FST][q_div](m_context, sd->vertex, m_vertex.buff, m_vertex.next);
+	GSVertexSW::s_cvb[m_vt.m_primclass][PRIM->TME][PRIM->FST][q_div](m_context, sd->vertex, dbuf.vtx_buff, dbuf.vtx_next);
 
-	std::memcpy(sd->index, m_index.buff, sizeof(u16) * m_index.tail);
+	std::memcpy(sd->index, dbuf.idx_buff, sizeof(u16) * dbuf.idx_tail);
 
 	GSVector4i scissor = context->scissor.in;
 	GSVector4i bbox = GSVector4i(m_vt.m_min.p.floor().upld(m_vt.m_max.p.ceil()));
@@ -381,12 +382,12 @@ void GSRendererSW::Draw()
 	{
 		int n = GSUtil::GetVertexCount(PRIM->PRIM);
 
-		for (u32 i = 0, j = 0; i < m_index.tail; i += n, j++)
+		for (u32 i = 0, j = 0; i < dbuf.idx_tail; i += n, j++)
 		{
 			for (int k = 0; k < n; k++)
 			{
-				GSVertex* v = &m_vertex.buff[m_index.buff[i + k]];
-				GSVertex* vn = &m_vertex.buff[m_index.buff[i + n - 1]];
+				GSVertex* v = &dbuf.vtx_buff[dbuf.idx_buff[i + k]];
+				GSVertex* vn = &dbuf.vtx_buff[dbuf.idx_buff[i + n - 1]];
 
 				fprintf(s_fp, "%d:%d %f %f %f %f\n",
 					j, k,
@@ -1410,14 +1411,15 @@ bool GSRendererSW::GetScanlineGlobalData(SharedData* data)
 	{
 		gd.sel.notest = 1;
 
-		u32 ofx = context->XYOFFSET.OFX;
+		const u32 ofx = context->XYOFFSET.OFX;
+		const GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 
-		for (int i = 0, j = m_vertex.tail; i < j; i++)
+		for (int i = 0, j = dbuf.vtx_tail; i < j; i++)
 		{
 #if _M_SSE >= 0x501
-			if ((((m_vertex.buff[i].XYZ.X - ofx) + 15) >> 4) & 7) // aligned to 8
+			if ((((dbuf.vtx_buff[i].XYZ.X - ofx) + 15) >> 4) & 7) // aligned to 8
 #else
-			if ((((m_vertex.buff[i].XYZ.X - ofx) + 15) >> 4) & 3) // aligned to 4
+			if ((((dbuf.vtx_buff[i].XYZ.X - ofx) + 15) >> 4) & 3) // aligned to 4
 #endif
 			{
 				gd.sel.notest = 0;

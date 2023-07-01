@@ -50,22 +50,23 @@ bool GSRendererHWFunctions::SwPrimRender(GSRendererHW& hw, bool invalidate_tc, b
 
 	GSRasterizerData data;
 	GSScanlineGlobalData& gd = data.global;
+	const GSRendererHW::GSDrawBuffer& dbuf = hw.GetDrawingDrawBuffer();
 
-	hw.m_sw_vertex_buffer.resize(((hw.m_vertex.next + 1) & ~1));
+	hw.m_sw_vertex_buffer.resize(((dbuf.vtx_next + 1) & ~1));
 
 	data.primclass = vt.m_primclass;
 	data.buff = nullptr;
 	data.vertex = hw.m_sw_vertex_buffer.data();
-	data.vertex_count = hw.m_vertex.next;
-	data.index = hw.m_index.buff;
-	data.index_count = hw.m_index.tail;
+	data.vertex_count = dbuf.vtx_next;
+	data.index = dbuf.idx_buff;
+	data.index_count = dbuf.idx_tail;
 	data.scanmsk_value = env.SCANMSK.MSK;
 
 	// Skip per pixel division if q is constant.
 	// Optimize the division by 1 with a nop. It also means that GS_SPRITE_CLASS must be processed when !vt.m_eq.q.
 	// If you have both GS_SPRITE_CLASS && vt.m_eq.q, it will depends on the first part of the 'OR'.
 	const u32 q_div = !hw.IsMipMapActive() && ((vt.m_eq.q && vt.m_min.t.z != 1.0f) || (!vt.m_eq.q && vt.m_primclass == GS_SPRITE_CLASS));
-	GSVertexSW::s_cvb[vt.m_primclass][PRIM->TME][PRIM->FST][q_div](context, data.vertex, hw.m_vertex.buff, hw.m_vertex.next);
+	GSVertexSW::s_cvb[vt.m_primclass][PRIM->TME][PRIM->FST][q_div](context, data.vertex, dbuf.vtx_buff, dbuf.vtx_next);
 
 	GSVector4i scissor = context->scissor.in;
 	GSVector4i bbox = GSVector4i(vt.m_min.p.floor().xyxy(vt.m_max.p.ceil())).rintersect(scissor);
@@ -534,12 +535,12 @@ bool GSRendererHWFunctions::SwPrimRender(GSRendererHW& hw, bool invalidate_tc, b
 
 		const u32 ofx = context->XYOFFSET.OFX;
 
-		for (int i = 0, j = hw.m_vertex.tail; i < j; i++)
+		for (int i = 0, j = dbuf.vtx_tail; i < j; i++)
 		{
 #if _M_SSE >= 0x501
-			if ((((hw.m_vertex.buff[i].XYZ.X - ofx) + 15) >> 4) & 7) // aligned to 8
+			if ((((dbuf.vtx_buff[i].XYZ.X - ofx) + 15) >> 4) & 7) // aligned to 8
 #else
-			if ((((hw.m_vertex.buff[i].XYZ.X - ofx) + 15) >> 4) & 3) // aligned to 4
+			if ((((dbuf.vtx_buff[i].XYZ.X - ofx) + 15) >> 4) & 3) // aligned to 4
 #endif
 			{
 				gd.sel.notest = 0;

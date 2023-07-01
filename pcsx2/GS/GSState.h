@@ -45,8 +45,6 @@ private:
 	GIFPackedRegHandler m_fpGIFPackedRegHandlers[16] = {};
 	GIFPackedRegHandler m_fpGIFPackedRegHandlerXYZ[8][4] = {};
 
-	void CheckFlushes();
-
 	void GIFPackedRegHandlerNull(const GIFPackedReg* RESTRICT r);
 	void GIFPackedRegHandlerRGBA(const GIFPackedReg* RESTRICT r);
 	void GIFPackedRegHandlerSTQ(const GIFPackedReg* RESTRICT r);
@@ -145,30 +143,51 @@ protected:
 	GSVector4i m_scissor_cull_max = {};
 	GSVector4i m_xyof = {};
 
-	struct
+	static constexpr u32 NUM_DRAW_BUFFERS = 4;
+
+	struct GSDrawBuffer
 	{
-		GSVertex* buff;
-		u32 head, tail, next, maxcount; // head: first vertex, tail: last vertex + 1, next: last indexed + 1
+		GSDrawingEnvironmentRegs env;
+		GSDrawingContext ctx;
+
+		GSVertex* vtx_buff;
+		u16* idx_buff;
+
+		u32 vtx_head, vtx_tail, vtx_next, vtx_maxcount; // head: first vertex, tail: last vertex + 1, next: last indexed + 1
+		u32 idx_tail;
+
 		u32 xy_tail;
 		GSVector4i xy[4];
 		GSVector4i xyhead;
-	} m_vertex = {};
+	};
 
-	struct
-	{
-		u16* buff;
-		u32 tail;
-	} m_index = {};
+	GSDrawBuffer m_draw_buffers[NUM_DRAW_BUFFERS] = {};
+	u32 m_first_draw_buffer = 0;
+	u32 m_active_draw_buffers = 1;
+	u32 m_writing_draw_buffer = 0;
+	u32 m_drawing_draw_buffer = 0;
+
+	__fi GSDrawBuffer& GetWritingDrawBuffer() { return m_draw_buffers[m_writing_draw_buffer]; }
+	__fi const GSDrawingContext& GetBufferedDrawContext() const { return m_draw_buffers[m_writing_draw_buffer].ctx; }
+	__fi const GSDrawingEnvironmentRegs& GetBufferedDrawingEnvironment() const { return m_draw_buffers[m_writing_draw_buffer].env; }
+	__fi const GSDrawBuffer& GetDrawingDrawBuffer() const { return m_draw_buffers[m_drawing_draw_buffer]; }
+	__fi GSDrawBuffer& GetDrawingDrawBuffer() { return m_draw_buffers[m_drawing_draw_buffer]; }
+	bool IsMatchingDrawBufferEnvironment(const GSDrawBuffer& dbuf, const GSDrawingEnvironmentRegs& env, const GSDrawingContext& ctx) const;
+	void SelectNewDrawBuffer();
+	void MoveDrawBufferTail(GSDrawBuffer& dst, GSDrawBuffer& src);
+
+	const GSDrawingEnvironmentRegs& GetNextDrawingEnvironment() const;
+	const GSDrawingContext& GetNextDrawingContext() const;
 
 	void UpdateContext();
 	void UpdateScissor();
 
 	void UpdateVertexKick();
 
-	void GrowVertexBuffer();
+	void GrowVertexBuffer(GSDrawBuffer& dbuf);
 	bool IsAutoFlushDraw(u32 prim);
 	template<u32 prim, bool index_swap>
-	void HandleAutoFlush();
+	void HandleAutoFlush(GSDrawBuffer& dbuf);
 	void CLUTAutoFlush(u32 prim);
 
 	template <u32 prim, bool auto_flush, bool index_swap>
@@ -199,6 +218,7 @@ protected:
 	};
 	TextureMinMaxResult GetTextureMinMax(GIFRegTEX0 TEX0, GIFRegCLAMP CLAMP, bool linear, bool clamp_to_tsize);
 	bool TryAlphaTest(u32& fm, const u32 fm_mask, u32& zm);
+	static bool IsOpaqueState(const GSDrawingEnvironmentRegs& env, const GSDrawingContext& ctx);
 	bool IsOpaque();
 	bool IsMipMapDraw();
 	bool IsMipMapActive();
@@ -217,8 +237,6 @@ public:
 	GSPrivRegSet* m_regs = nullptr;
 	GSLocalMemory m_mem;
 	alignas(16) GSDrawingEnvironment m_env = {};
-	alignas(16) GSDrawingEnvironmentRegs m_prev_env = {};
-	alignas(16) GSDrawingContext m_prev_ctx = {};
 	const GSDrawingEnvironmentRegs* m_draw_env = &m_env;
 	GSDrawingContext* m_context = nullptr;
 	GSVector4i temp_draw_rect = {};
@@ -234,7 +252,6 @@ public:
 	u8 m_scanmask_used = 0;
 	u8 m_force_preload = 0;
 	u32 m_dirty_gs_regs = 0;
-	int m_backed_up_ctx = 0;
 	std::vector<GSUploadQueue> m_draw_transfers;
 
 	static int s_n;
@@ -911,7 +928,7 @@ public:
 	virtual void UpdateSettings(const Pcsx2Config::GSOptions& old_config);
 
 	void Flush(GSFlushReason reason);
-	void FlushPrim();
+	void FlushDrawBuffer(u32 draw_buffer_idx, bool keep_verts);
 	bool TestDrawChanged();
 	void FlushWrite();
 	virtual void Draw() = 0;

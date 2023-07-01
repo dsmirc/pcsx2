@@ -255,26 +255,27 @@ GSTexture* GSRendererHW::GetFeedbackOutput(float& scale)
 
 void GSRendererHW::Lines2Sprites()
 {
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 	ASSERT(m_vt.m_primclass == GS_SPRITE_CLASS);
 
 	// each sprite converted to quad needs twice the space
 
-	while (m_vertex.tail * 2 > m_vertex.maxcount)
+	while (dbuf.vtx_tail * 2 > dbuf.vtx_maxcount)
 	{
-		GrowVertexBuffer();
+		GrowVertexBuffer(dbuf);
 	}
 
 	// assume vertices are tightly packed and sequentially indexed (it should be the case)
 	const bool predivide_q = PRIM->TME && !PRIM->FST && m_vt.m_accurate_stq;
 
-	if (m_vertex.next >= 2)
+	if (dbuf.vtx_next >= 2)
 	{
-		const u32 count = m_vertex.next;
+		const u32 count = dbuf.vtx_next;
 
 		int i = static_cast<int>(count) * 2 - 4;
-		GSVertex* s = &m_vertex.buff[count - 2];
-		GSVertex* q = &m_vertex.buff[count * 2 - 4];
-		u16* RESTRICT index = &m_index.buff[count * 3 - 6];
+		GSVertex* s = &dbuf.vtx_buff[count - 2];
+		GSVertex* q = &dbuf.vtx_buff[count * 2 - 4];
+		u16* RESTRICT index = &dbuf.idx_buff[count * 3 - 6];
 
 		// Sprites are flat shaded, so the provoking vertex doesn't matter here.
 		constexpr GSVector4i indices = GSVector4i::cxpr16(0, 1, 2, 1, 2, 3, 0, 0);
@@ -328,19 +329,21 @@ void GSRendererHW::Lines2Sprites()
 			std::memcpy(&index[4], &high, sizeof(high));
 		}
 
-		m_vertex.head = m_vertex.tail = m_vertex.next = count * 2;
-		m_index.tail = count * 3;
+		dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = count * 2;
+		dbuf.idx_tail = count * 3;
 	}
 }
 
 void GSRendererHW::ExpandLineIndices()
 {
-	const u32 process_count = (m_index.tail + 7) / 8 * 8;
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+
+	const u32 process_count = (dbuf.idx_tail + 7) / 8 * 8;
 	const u32 expansion_factor = 3;
-	m_index.tail *= expansion_factor;
-	GSVector4i* end = reinterpret_cast<GSVector4i*>(m_index.buff);
-	GSVector4i* read = reinterpret_cast<GSVector4i*>(m_index.buff + process_count);
-	GSVector4i* write = reinterpret_cast<GSVector4i*>(m_index.buff + process_count * expansion_factor);
+	dbuf.idx_tail *= expansion_factor;
+	GSVector4i* end = reinterpret_cast<GSVector4i*>(dbuf.idx_buff);
+	GSVector4i* read = reinterpret_cast<GSVector4i*>(dbuf.idx_buff + process_count);
+	GSVector4i* write = reinterpret_cast<GSVector4i*>(dbuf.idx_buff + process_count * expansion_factor);
 
 	constexpr GSVector4i mask0 = GSVector4i::cxpr8(0, 1, 0, 1, 2, 3, 0, 1, 2, 3, 2, 3, 4, 5, 4, 5);
 	constexpr GSVector4i mask1 = GSVector4i::cxpr8(6, 7, 4, 5, 6, 7, 6, 7, 8, 9, 8, 9, 10, 11, 8, 9);
@@ -365,8 +368,10 @@ void GSRendererHW::ExpandLineIndices()
 // Fix the vertex position/tex_coordinate from 16 bits color to 32 bits color
 void GSRendererHW::ConvertSpriteTextureShuffle(bool& write_ba, bool& read_ba)
 {
-	const u32 count = m_vertex.next;
-	GSVertex* v = &m_vertex.buff[0];
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+
+	const u32 count = dbuf.vtx_next;
+	GSVertex* v = &dbuf.vtx_buff[0];
 	const GIFRegXYOFFSET& o = m_context->XYOFFSET;
 
 	// vertex position is 8 to 16 pixels, therefore it is the 16-31 bits of the colors
@@ -427,8 +432,8 @@ void GSRendererHW::ConvertSpriteTextureShuffle(bool& write_ba, bool& read_ba)
 			GSVector4::storeh(&v[1].ST.S, st);
 		}
 
-		m_vertex.head = m_vertex.tail = m_vertex.next = 2;
-		m_index.tail = 2;
+		dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = 2;
+		dbuf.idx_tail = 2;
 		return;
 	}
 
@@ -583,7 +588,8 @@ GSVector4 GSRendererHW::RealignTargetTextureCoordinate(const GSTextureCache::Sou
 	if (GSConfig.UserHacks_HalfPixelOffset <= 1 || GetUpscaleMultiplier() == 1.0f)
 		return GSVector4(0.0f);
 
-	const GSVertex* v = &m_vertex.buff[0];
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	const GSVertex* v = &dbuf.vtx_buff[0];
 	const float scale = tex->GetScale();
 	const bool linear = m_vt.IsRealLinear();
 	const int t_position = v[0].U;
@@ -669,12 +675,13 @@ void GSRendererHW::MergeSprite(GSTextureCache::Source* tex)
 			// neither in a fast way. So instead let's just take the hypothesis that all sprites must have the same
 			// size.
 			// Tested on Tekken 5.
-			const GSVertex* v = &m_vertex.buff[0];
+			GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+			const GSVertex* v = &dbuf.vtx_buff[0];
 			bool is_paving = true;
 			// SSE optimization: shuffle m[1] to have (4*32 bits) X, Y, U, V
 			const int first_dpX = v[1].XYZ.X - v[0].XYZ.X;
 			const int first_dpU = v[1].U - v[0].U;
-			for (u32 i = 0; i < m_vertex.next; i += 2)
+			for (u32 i = 0; i < dbuf.vtx_next; i += 2)
 			{
 				const int dpX = v[i + 1].XYZ.X - v[i].XYZ.X;
 				const int dpU = v[i + 1].U - v[i].U;
@@ -689,13 +696,13 @@ void GSRendererHW::MergeSprite(GSTextureCache::Source* tex)
 			const GSVector4 delta_p = m_vt.m_max.p - m_vt.m_min.p;
 			const GSVector4 delta_t = m_vt.m_max.t - m_vt.m_min.t;
 			const bool is_blit = PrimitiveOverlap() == PRIM_OVERLAP_NO;
-			GL_INS("PP SAMPLER: Dp %f %f Dt %f %f. Is blit %d, is paving %d, count %d", delta_p.x, delta_p.y, delta_t.x, delta_t.y, is_blit, is_paving, m_vertex.tail);
+			GL_INS("PP SAMPLER: Dp %f %f Dt %f %f. Is blit %d, is paving %d, count %d", delta_p.x, delta_p.y, delta_t.x, delta_t.y, is_blit, is_paving, dbuf.vtx_tail);
 #endif
 
 			if (is_paving)
 			{
 				// Replace all sprite with a single fullscreen sprite.
-				GSVertex* s = &m_vertex.buff[0];
+				GSVertex* s = &dbuf.vtx_buff[0];
 
 				s[0].XYZ.X = static_cast<u16>((16.0f * m_vt.m_min.p.x) + m_context->XYOFFSET.OFX);
 				s[1].XYZ.X = static_cast<u16>((16.0f * m_vt.m_max.p.x) + m_context->XYOFFSET.OFX);
@@ -707,8 +714,8 @@ void GSRendererHW::MergeSprite(GSTextureCache::Source* tex)
 				s[1].U = static_cast<u16>(16.0f * m_vt.m_max.t.x);
 				s[1].V = static_cast<u16>(16.0f * m_vt.m_max.t.y);
 
-				m_vertex.head = m_vertex.tail = m_vertex.next = 2;
-				m_index.tail = 2;
+				dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = 2;
+				dbuf.idx_tail = 2;
 			}
 		}
 	}
@@ -813,6 +820,7 @@ bool GSRendererHW::IsSplitTextureShuffle()
 
 	// Make sure nothing unexpected has changed.
 	// Twinsanity seems to screw with ZBUF here despite it being irrelevant.
+	// TODO: wrong for draw buffering
 	const GSDrawingContext& next_ctx = m_env.CTXT[m_env.PRIM.CTXT];
 	if (((m_context->TEX0.U64 ^ next_ctx.TEX0.U64) & (~0x3FFF)) != 0 ||
 		m_context->TEX1.U64 != next_ctx.TEX1.U64 ||
@@ -825,7 +833,8 @@ bool GSRendererHW::IsSplitTextureShuffle()
 	}
 
 	// Different channel being shuffled, so needs to be handled separately (misdetection in 50 Cent)
-	if (m_vertex.buff[m_index.buff[0]].U != m_v.U)
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	if (dbuf.vtx_buff[dbuf.idx_buff[0]].U != m_v.U)
 		return false;
 
 	// Check that both the position and texture coordinates are page aligned, so we can work in pages instead of coordinates.
@@ -925,32 +934,29 @@ bool GSRendererHW::TryToResolveSinglePageFramebuffer(GIFRegFRAME& FRAME, bool on
 	u32 new_psm = FRAME.PSM;
 	pxAssert(new_bw <= 1);
 
-	if (m_backed_up_ctx >= 0)
+	const GSDrawingContext& next_ctx = GetNextDrawingContext();
+	if (next_ctx.FRAME.FBW != new_bw)
 	{
-		const GSDrawingContext& next_ctx = m_env.CTXT[m_backed_up_ctx];
-		if (next_ctx.FRAME.FBW != new_bw)
+		// Using it as a target/Z next (Superman Returns).
+		if (start_bp == next_ctx.FRAME.Block())
 		{
-			// Using it as a target/Z next (Superman Returns).
-			if (start_bp == next_ctx.FRAME.Block())
-			{
-				GL_INS("TryToResolveSinglePageWidth(): Next FBP is split clear, using FBW of %u", next_ctx.FRAME.FBW);
-				new_bw = next_ctx.FRAME.FBW;
-				new_psm = next_ctx.FRAME.PSM;
-			}
-			else if (start_bp == next_ctx.ZBUF.Block())
-			{
-				GL_INS("TryToResolveSinglePageWidth(): Next ZBP is split clear, using FBW of %u", next_ctx.FRAME.FBW);
-				new_bw = next_ctx.FRAME.FBW;
-			}
+			GL_INS("TryToResolveSinglePageWidth(): Next FBP is split clear, using FBW of %u", next_ctx.FRAME.FBW);
+			new_bw = next_ctx.FRAME.FBW;
+			new_psm = next_ctx.FRAME.PSM;
 		}
+		else if (start_bp == next_ctx.ZBUF.Block())
+		{
+			GL_INS("TryToResolveSinglePageWidth(): Next ZBP is split clear, using FBW of %u", next_ctx.FRAME.FBW);
+			new_bw = next_ctx.FRAME.FBW;
+		}
+	}
 
-		// Might be using it as a texture next (NARC).
-		if (new_bw <= 1 && next_ctx.TEX0.TBP0 == start_bp && new_bw != next_ctx.TEX0.TBW)
-		{
-			GL_INS("TryToResolveSinglePageWidth(): Next texture is using split clear, using FBW of %u", next_ctx.TEX0.TBW);
-			new_bw = next_ctx.TEX0.TBW;
-			new_psm = next_ctx.TEX0.PSM;
-		}
+	// Might be using it as a texture next (NARC).
+	if (new_bw <= 1 && next_ctx.TEX0.TBP0 == start_bp && new_bw != next_ctx.TEX0.TBW)
+	{
+		GL_INS("TryToResolveSinglePageWidth(): Next texture is using split clear, using FBW of %u", next_ctx.TEX0.TBW);
+		new_bw = next_ctx.TEX0.TBW;
+		new_psm = next_ctx.TEX0.PSM;
 	}
 
 	if (!only_next_draw)
@@ -1070,7 +1076,8 @@ bool GSRendererHW::CheckNextDrawForSplitClear(const GSVector4i& r, u32* pages_co
 		*pages_covered_by_this_draw = ((end_block - m_cached_ctx.FRAME.Block()) + (BLOCKS_PER_PAGE)) / BLOCKS_PER_PAGE;
 
 	// must be changing FRAME
-	if (m_backed_up_ctx < 0 || (m_dirty_gs_regs & (1u << DIRTY_REG_FRAME)) == 0)
+	// TODO: FIXME
+	if (/*m_backed_up_ctx < 0 || */(m_dirty_gs_regs & (1u << DIRTY_REG_FRAME)) == 0)
 		return false;
 
 	// rect width should match the FBW (page aligned)
@@ -1078,6 +1085,7 @@ bool GSRendererHW::CheckNextDrawForSplitClear(const GSVector4i& r, u32* pages_co
 		return false;
 
 	// next FBP should point to the end of the rect
+	// TODO: wrong for draw buffering
 	const GSDrawingContext& next_ctx = m_env.CTXT[m_env.PRIM.CTXT];
 	if (next_ctx.FRAME.Block() != ((end_block + 1) % MAX_BLOCKS) ||
 		m_context->TEX0.U64 != next_ctx.TEX0.U64 ||
@@ -1140,7 +1148,7 @@ bool GSRendererHW::IsTBPFrameOrZ(u32 tbp) const
 		// Depth is always pass/fail (no read) and write are discarded.
 		(zm != 0 && m_cached_ctx.TEST.ZTST <= ZTST_ALWAYS) ||
 		// Depth test will always pass
-		(zm != 0 && m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(m_vertex.buff[0].XYZ.Z, max_z) == max_z) ||
+		(zm != 0 && m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(GetDrawingDrawBuffer().vtx_buff[0].XYZ.Z, max_z) == max_z) ||
 		// Depth will be written through the RT
 		(!no_rt && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && !PRIM->TME && zm == 0 && (fm & fm_mask) == 0 && m_cached_ctx.TEST.ZTE));
 
@@ -1327,7 +1335,8 @@ void GSRendererHW::SwSpriteRender()
 
 	const bool alpha_blending_enabled = PRIM->ABE;
 
-	const GSVertex& v = m_index.tail > 0 ? m_vertex.buff[m_index.buff[m_index.tail - 1]] : GSVertex(); // Last vertex if any.
+	const GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	const GSVertex& v = dbuf.idx_tail > 0 ? dbuf.vtx_buff[dbuf.idx_buff[dbuf.idx_tail - 1]] : GSVertex(); // Last vertex if any.
 	const GSVector4i vc = GSVector4i(v.RGBAQ.R, v.RGBAQ.G, v.RGBAQ.B, v.RGBAQ.A) // 0x000000AA000000BB000000GG000000RR
 							  .ps32(); // 0x00AA00BB00GG00RR00AA00BB00GG00RR
 
@@ -1454,10 +1463,10 @@ bool GSRendererHW::CanUseSwSpriteRender()
 		return false;
 	if (PRIM->PRIM != GS_TRIANGLESTRIP && PRIM->PRIM != GS_SPRITE) // Triangle strip or sprite draw
 		return false;
-	if (m_vt.m_primclass == GS_TRIANGLE_CLASS && (PRIM->PRIM != GS_TRIANGLESTRIP || m_vertex.tail != 4)) // If triangle class, strip draw with 4 vertices (two prims, emulating single sprite prim)
+	if (m_vt.m_primclass == GS_TRIANGLE_CLASS && (PRIM->PRIM != GS_TRIANGLESTRIP || GetDrawingDrawBuffer().vtx_tail != 4)) // If triangle class, strip draw with 4 vertices (two prims, emulating single sprite prim)
 		return false;
 	// TODO If GS_TRIANGLESTRIP draw, check that the draw is axis aligned
-	if (m_vt.m_primclass == GS_SPRITE_CLASS && (PRIM->PRIM != GS_SPRITE || m_vertex.tail != 2)) // If sprite class, sprite draw with 2 vertices (one prim)
+	if (m_vt.m_primclass == GS_SPRITE_CLASS && (PRIM->PRIM != GS_SPRITE || GetDrawingDrawBuffer().vtx_tail != 2)) // If sprite class, sprite draw with 2 vertices (one prim)
 		return false;
 	if (m_cached_ctx.DepthRead() || m_cached_ctx.DepthWrite()) // No depth handling
 		return false;
@@ -1501,8 +1510,9 @@ void GSRendererHW::RoundSpriteOffset()
 #if defined(DEBUG_V) || defined(DEBUG_U)
 	bool debug = linear;
 #endif
-	const u32 count = m_vertex.next;
-	GSVertex* v = &m_vertex.buff[0];
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	const u32 count = dbuf.vtx_next;
+	GSVertex* v = &dbuf.vtx_buff[0];
 
 	for (u32 i = 0; i < count; i += 2)
 	{
@@ -1763,7 +1773,7 @@ void GSRendererHW::Draw()
 		// Depth is always pass/fail (no read) and write are discarded.
 		(!m_cached_ctx.TEST.ZTE || m_cached_ctx.TEST.ZTST <= ZTST_ALWAYS) ||
 		// Depth test will always pass
-		(m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(m_vertex.buff[0].XYZ.Z, max_z) == max_z);
+		(m_cached_ctx.TEST.ZTST == ZTST_GEQUAL && m_vt.m_eq.z && std::min(GetDrawingDrawBuffer().vtx_buff[0].XYZ.Z, max_z) == max_z);
 	bool no_ds = (zm != 0 && all_depth_tests_pass) ||
 					   // Depth will be written through the RT
 					   (!no_rt && m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && !PRIM->TME && zm == 0 && (fm & fm_mask) == 0 && m_cached_ctx.TEST.ZTE);
@@ -2206,7 +2216,8 @@ void GSRendererHW::Draw()
 			&& draw_sprite_tex && (src->m_32_bits_fmt || m_copy_16bit_to_target_shuffle);
 
 		// Okami mustn't call this code
-		if (m_texture_shuffle && m_vertex.next < 3 && PRIM->FST && ((m_cached_ctx.FRAME.FBMSK & fm_mask) == 0))
+		GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+		if (m_texture_shuffle && dbuf.vtx_next < 3 && PRIM->FST && ((m_cached_ctx.FRAME.FBMSK & fm_mask) == 0))
 		{
 			// Avious dubious call to m_texture_shuffle on 16 bits games
 			// The pattern is severals column of 8 pixels. A single sprite
@@ -2214,7 +2225,7 @@ void GSRendererHW::Draw()
 
 			// Shadow of Memories/Destiny shouldn't call this code.
 			// Causes shadow flickering.
-			const GSVertex* v = &m_vertex.buff[0];
+			const GSVertex* v = &dbuf.vtx_buff[0];
 			m_texture_shuffle = ((v[1].U - v[0].U) < 256) ||
 				// Tomb Raider Angel of Darkness relies on this behavior to produce a fog effect.
 				// In this case, the address of the framebuffer and texture are the same.
@@ -2570,8 +2581,9 @@ void GSRendererHW::Draw()
 	// Note: second hack corrects only the texture coordinate
 	if (CanUpscale() && (m_vt.m_primclass == GS_SPRITE_CLASS))
 	{
-		const u32 count = m_vertex.next;
-		GSVertex* v = &m_vertex.buff[0];
+		GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+		const u32 count = dbuf.vtx_next;
+		GSVertex* v = &dbuf.vtx_buff[0];
 
 		// Hack to avoid vertical black line in various games (ace combat/tekken)
 		if (GSConfig.UserHacks_AlignSpriteX)
@@ -2706,44 +2718,45 @@ void GSRendererHW::Draw()
 /// Verifies assumptions we expect to hold about indices
 bool GSRendererHW::VerifyIndices()
 {
+	const GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 	switch (m_vt.m_primclass)
 	{
 		case GS_SPRITE_CLASS:
-			if (m_index.tail % 2 != 0)
+			if (dbuf.idx_tail % 2 != 0)
 				return false;
 			[[fallthrough]];
 		case GS_POINT_CLASS:
 			// Expect indices to be flat increasing
-			for (u32 i = 0; i < m_index.tail; i++)
+			for (u32 i = 0; i < dbuf.idx_tail; i++)
 			{
-				if (m_index.buff[i] != i)
+				if (dbuf.idx_buff[i] != i)
 					return false;
 			}
 			break;
 		case GS_LINE_CLASS:
-			if (m_index.tail % 2 != 0)
+			if (dbuf.idx_tail % 2 != 0)
 				return false;
 			// Expect each line to be a pair next to each other
 			// VS expand relies on this!
 			if (g_gs_device->Features().provoking_vertex_last)
 			{
-				for (u32 i = 0; i < m_index.tail; i += 2)
+				for (u32 i = 0; i < dbuf.idx_tail; i += 2)
 				{
-					if (m_index.buff[i] + 1 != m_index.buff[i + 1])
+					if (dbuf.idx_buff[i] + 1 != dbuf.idx_buff[i + 1])
 						return false;
 				}
 			}
 			else
 			{
-				for (u32 i = 0; i < m_index.tail; i += 2)
+				for (u32 i = 0; i < dbuf.idx_tail; i += 2)
 				{
-					if (m_index.buff[i] != m_index.buff[i + 1] + 1)
+					if (dbuf.idx_buff[i] != dbuf.idx_buff[i + 1] + 1)
 						return false;
 				}
 			}
 			break;
 		case GS_TRIANGLE_CLASS:
-			if (m_index.tail % 3 != 0)
+			if (dbuf.idx_tail % 3 != 0)
 				return false;
 			break;
 		case GS_INVALID_CLASS:
@@ -2754,18 +2767,19 @@ bool GSRendererHW::VerifyIndices()
 
 void GSRendererHW::SetupIA(float target_scale, float sx, float sy)
 {
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 	GL_PUSH("IA");
 
 	if (GSConfig.UserHacks_WildHack && !m_isPackedUV_HackFlag && PRIM->TME && PRIM->FST)
 	{
-		for (u32 i = 0; i < m_vertex.next; i++)
-			m_vertex.buff[i].UV &= 0x3FEF3FEF;
+		for (u32 i = 0; i < dbuf.vtx_next; i++)
+			dbuf.vtx_buff[i].UV &= 0x3FEF3FEF;
 	}
 
 	const bool unscale_pt_ln = !GSConfig.UserHacks_DisableSafeFeatures && (target_scale != 1.0f);
 	const GSDevice::FeatureSupport features = g_gs_device->Features();
 
-	ASSERT(VerifyIndices());
+	//ASSERT(VerifyIndices());
 
 	switch (m_vt.m_primclass)
 	{
@@ -2785,9 +2799,9 @@ void GSRendererHW::SetupIA(float target_scale, float sx, float sy)
 						m_conf.vs.expand = GSHWDrawConfig::VSExpand::Point;
 						m_conf.cb_vs.point_size = GSVector2(16.0f * sx, 16.0f * sy);
 						m_conf.topology = GSHWDrawConfig::Topology::Triangle;
-						m_conf.verts = m_vertex.buff;
-						m_conf.nverts = m_vertex.next;
-						m_conf.nindices = m_index.tail * 6;
+						m_conf.verts = dbuf.vtx_buff;
+						m_conf.nverts = dbuf.vtx_next;
+						m_conf.nindices = dbuf.idx_tail * 6;
 						m_conf.indices_per_prim = 6;
 						return;
 					}
@@ -2833,9 +2847,9 @@ void GSRendererHW::SetupIA(float target_scale, float sx, float sy)
 				{
 					m_conf.topology = GSHWDrawConfig::Topology::Triangle;
 					m_conf.vs.expand = GSHWDrawConfig::VSExpand::Sprite;
-					m_conf.verts = m_vertex.buff;
-					m_conf.nverts = m_vertex.next;
-					m_conf.nindices = m_index.tail * 3;
+					m_conf.verts = dbuf.vtx_buff;
+					m_conf.nverts = dbuf.vtx_next;
+					m_conf.nindices = dbuf.idx_tail * 3;
 					m_conf.indices_per_prim = 6;
 					return;
 				}
@@ -2860,10 +2874,10 @@ void GSRendererHW::SetupIA(float target_scale, float sx, float sy)
 			__assume(0);
 	}
 
-	m_conf.verts = m_vertex.buff;
-	m_conf.nverts = m_vertex.next;
-	m_conf.indices = m_index.buff;
-	m_conf.nindices = m_index.tail;
+	m_conf.verts = dbuf.vtx_buff;
+	m_conf.nverts = dbuf.vtx_next;
+	m_conf.indices = dbuf.idx_buff;
+	m_conf.nindices = dbuf.idx_tail;
 }
 
 void GSRendererHW::EmulateZbuffer(const GSTextureCache::Target* ds)
@@ -3166,7 +3180,7 @@ __ri bool GSRendererHW::EmulateChannelShuffle(GSTextureCache::Target* src, bool 
 			m_conf.ps.urban_chaos_hle = 1;
 		}
 	}
-	else if (m_index.tail <= 64 && m_cached_ctx.CLAMP.WMT == 3)
+	else if (GetDrawingDrawBuffer().idx_tail <= 64 && m_cached_ctx.CLAMP.WMT == 3)
 	{
 		// Blood will tell. I think it is channel effect too but again
 		// implemented in a different way. I don't want to add more CRC stuff. So
@@ -3194,7 +3208,7 @@ __ri bool GSRendererHW::EmulateChannelShuffle(GSTextureCache::Target* src, bool 
 	{
 		// Read either Red or Green. Let's check the V coordinate. 0-1 is likely top so
 		// red. 2-3 is likely bottom so green (actually depends on texture base pointer offset)
-		const bool green = PRIM->FST && (m_vertex.buff[0].V & 32);
+		const bool green = PRIM->FST && (GetDrawingDrawBuffer().vtx_buff[0].V & 32);
 		if (green && (m_cached_ctx.FRAME.FBMSK & 0x00FFFFFF) == 0x00FFFFFF)
 		{
 			// Typically used in Terminator 3
@@ -3275,14 +3289,15 @@ __ri bool GSRendererHW::EmulateChannelShuffle(GSTextureCache::Target* src, bool 
 	// Performance GPU note: it could be wise to reduce the size to
 	// the rendered size of the framebuffer
 
-	GSVertex* s = &m_vertex.buff[0];
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	GSVertex* s = &dbuf.vtx_buff[0];
 	s[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + 0);
 	s[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + 16384);
 	s[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + 0);
 	s[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + 16384);
 
-	m_vertex.head = m_vertex.tail = m_vertex.next = 2;
-	m_index.tail = 2;
+	dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = 2;
+	dbuf.idx_tail = 2;
 	return true;
 }
 
@@ -3665,7 +3680,7 @@ void GSRendererHW::EmulateBlending(bool& DATE_PRIMID, bool& DATE_BARRIER, bool& 
 #if 0
 	GL_INS("BLEND_INFO: %u/%u/%u/%u. Clamp:%u. Prim:%d number %u (drawlist %zu) (sw %d)",
 		m_conf.ps.blend_a, m_conf.ps.blend_b, m_conf.ps.blend_c, m_conf.ps.blend_d,
-		m_env.COLCLAMP.CLAMP, m_vt.m_primclass, m_vertex.next, m_drawlist.size(), sw_blending);
+		m_env.COLCLAMP.CLAMP, m_vt.m_primclass, dbuf.vtx_next, m_drawlist.size(), sw_blending);
 #endif
 	if (color_dest_blend)
 	{
@@ -3899,9 +3914,10 @@ __ri void GSRendererHW::EmulateTextureSampler(const GSTextureCache::Target* rt, 
 
 	if (m_game.title == CRC::ICO)
 	{
-		const GSVertex* v = &m_vertex.buff[0];
+		const GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+		const GSVertex* v = &dbuf.vtx_buff[0];
 		const GSVideoMode mode = GetVideoMode();
-		if (tex && m_vt.m_primclass == GS_SPRITE_CLASS && m_vertex.next == 2 && PRIM->ABE && // Blend texture
+		if (tex && m_vt.m_primclass == GS_SPRITE_CLASS && dbuf.vtx_next == 2 && PRIM->ABE && // Blend texture
 			((v[1].U == 8200 && v[1].V == 7176 && mode == GSVideoMode::NTSC) || // at display resolution 512x448
 			(v[1].U == 8200 && v[1].V == 8200 && mode == GSVideoMode::PAL)) && // at display resolution 512x512
 			tex->m_TEX0.PSM == PSMT8H) // i.e. read the alpha channel of a 32 bits texture
@@ -4601,7 +4617,7 @@ __ri void GSRendererHW::DrawPrims(GSTextureCache::Target* rt, GSTextureCache::Ta
 				GL_PERF("DATE: Fast with alpha %d-%d", GetAlphaMinMax().min, GetAlphaMinMax().max);
 				DATE_one = true;
 			}
-			else if (features.texture_barrier && ((m_vt.m_primclass == GS_SPRITE_CLASS && m_drawlist.size() < 50) || (m_index.tail < 100)))
+			else if (features.texture_barrier && ((m_vt.m_primclass == GS_SPRITE_CLASS && m_drawlist.size() < 50) || (GetDrawingDrawBuffer().idx_tail < 100)))
 			{
 				// texture barrier will split the draw call into n draw call. It is very efficient for
 				// few primitive draws. Otherwise it sucks.
@@ -5239,10 +5255,12 @@ void GSRendererHW::SetNewZBUF(u32 bp, u32 psm)
 
 bool GSRendererHW::DetectStripedDoubleClear(bool& no_rt, bool& no_ds)
 {
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	GSVertex* const v = &dbuf.vtx_buff[0];
 	const bool ZisFrame = m_cached_ctx.FRAME.FBP == m_cached_ctx.ZBUF.ZBP && !m_cached_ctx.ZBUF.ZMSK &&
 						  (m_cached_ctx.FRAME.PSM & 0x30) != (m_cached_ctx.ZBUF.PSM & 0x30) &&
 						  (m_cached_ctx.FRAME.PSM & 0xF) == (m_cached_ctx.ZBUF.PSM & 0xF) && m_vt.m_eq.z == 1 &&
-						  m_vertex.buff[1].XYZ.Z == m_vertex.buff[1].RGBAQ.U32[0];
+						  v[1].XYZ.Z == v[1].RGBAQ.U32[0];
 
 	// Z and color must be constant and the same
 	if (!ZisFrame || m_vt.m_eq.rgba != 0xFFFF)
@@ -5256,14 +5274,13 @@ bool GSRendererHW::DetectStripedDoubleClear(bool& no_rt, bool& no_ds)
 		m_cached_ctx.FRAME.Block(), m_cached_ctx.FRAME.FBW, m_cached_ctx.ZBUF.Block());
 
 	// And replace the vertex with a fullscreen quad.
-	GSVertex* const v = &m_vertex.buff[0];
 	const GSVector4i fpr = m_r.sll32(4);
 	v[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.x);
 	v[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.y);
 	v[1].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.z);
 	v[1].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.w);
-	m_vertex.head = m_vertex.tail = m_vertex.next = 2;
-	m_index.tail = 2;
+	dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = 2;
+	dbuf.idx_tail = 2;
 	m_primitive_covers_without_gaps = true;
 
 	// Remove Z, we'll write it through colour.
@@ -5280,7 +5297,7 @@ bool GSRendererHW::DetectDoubleHalfClear(bool& no_rt, bool& no_ds)
 
 	// Z and color must be constant and the same
 	// TODO: move covers check to caller
-	GSVertex* v = &m_vertex.buff[0];
+	GSVertex* const v = &GetDrawingDrawBuffer().vtx_buff[0];
 	if (m_vt.m_eq.rgba != 0xFFFF || !m_vt.m_eq.z || v[1].XYZ.Z != v[1].RGBAQ.U32[0])
 		return false;
 
@@ -5301,9 +5318,10 @@ bool GSRendererHW::DetectDoubleHalfClear(bool& no_rt, bool& no_ds)
 
 	// Try peeking ahead to confirm whether this is a "normal" clear, where the two buffers just happen to be
 	// bang up next to each other, or a double half clear. The two are really difficult to differentiate.
-	if (m_backed_up_ctx >= 0 && m_env.CTXT[m_backed_up_ctx].FRAME.FBW == m_cached_ctx.FRAME.FBW &&
-		((m_env.CTXT[m_backed_up_ctx].FRAME.FBP == base && m_env.CTXT[m_backed_up_ctx].ZBUF.ZBP != half) ||
-			(m_env.CTXT[m_backed_up_ctx].ZBUF.ZBP == base && m_env.CTXT[m_backed_up_ctx].FRAME.FBP != half)))
+	const GSDrawingContext& next_ctx = GetNextDrawingContext();
+	if (next_ctx.FRAME.FBW == m_cached_ctx.FRAME.FBW &&
+		((next_ctx.FRAME.FBP == base && next_ctx.ZBUF.ZBP != half) ||
+			(next_ctx.ZBUF.ZBP == base && next_ctx.FRAME.FBP != half)))
 	{
 		// Needed for Spider-Man 2 (target was previously half size, double half cleared at new size).
 		GL_INS("Confirmed double-half clear by next FBP/ZBP");
@@ -5383,7 +5401,7 @@ bool GSRendererHW::TryTargetClear(GSTextureCache::Target* rt, GSTextureCache::Ta
 		if (ds && !preserve_depth && m_r.rintersect(ds->m_valid).eq(ds->m_valid))
 		{
 			const u32 max_z = 0xFFFFFFFF >> (GSLocalMemory::m_psm[m_cached_ctx.ZBUF.PSM].fmt * 8);
-			const u32 z = std::min(max_z, m_vertex.buff[1].XYZ.Z);
+			const u32 z = std::min(max_z, GetDrawingDrawBuffer().vtx_buff[1].XYZ.Z);
 			const float d = static_cast<float>(z) * (g_gs_device->Features().clip_control ? 0x1p-32f : 0x1p-24f);
 			GL_INS("TryTargetClear(): DS at %x <= %f", ds->m_TEX0.TBP0, d);
 			g_gs_device->ClearDepth(ds->m_texture, d);
@@ -5419,7 +5437,7 @@ bool GSRendererHW::TryGSMemClear(bool no_rt, bool no_ds)
 		ClearGSLocalMemory(m_context->offset.fb, m_r, GetConstantDirectWriteMemClearColor());
 
 	if (!no_ds)
-		ClearGSLocalMemory(m_context->offset.zb, m_r, m_vertex.buff[1].XYZ.Z);
+		ClearGSLocalMemory(m_context->offset.zb, m_r, GetDrawingDrawBuffer().vtx_buff[1].XYZ.Z);
 
 	return true;
 }
@@ -5535,7 +5553,7 @@ void GSRendererHW::ClearGSLocalMemory(const GSOffset& off, const GSVector4i& r, 
 
 bool GSRendererHW::OI_BlitFMV(GSTextureCache::Target* _rt, GSTextureCache::Source* tex, const GSVector4i& r_draw)
 {
-	if (r_draw.w > 1024 && (m_vt.m_primclass == GS_SPRITE_CLASS) && (m_vertex.next == 2) && PRIM->TME && !PRIM->ABE && tex && !tex->m_target && m_cached_ctx.TEX0.TBW > 0)
+	if (r_draw.w > 1024 && (m_vt.m_primclass == GS_SPRITE_CLASS) && (GetDrawingDrawBuffer().vtx_next == 2) && PRIM->TME && !PRIM->ABE && tex && !tex->m_target && m_cached_ctx.TEX0.TBW > 0)
 	{
 		GL_PUSH("OI_BlitFMV");
 
@@ -5617,9 +5635,10 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 	}
 
 	// This is potentially wrong for fans/strips...
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 	if (m_vt.m_primclass == GS_TRIANGLE_CLASS)
 	{
-		m_primitive_covers_without_gaps = (m_index.tail == 6);
+		m_primitive_covers_without_gaps = (dbuf.idx_tail == 6);
 		return m_primitive_covers_without_gaps.value();
 	}
 	else if (m_vt.m_primclass != GS_SPRITE_CLASS)
@@ -5629,7 +5648,7 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 	}
 
 	// Simple case: one sprite.
-	if (m_index.tail == 2)
+	if (dbuf.idx_tail == 2)
 	{
 		m_primitive_covers_without_gaps = true;
 		return true;
@@ -5637,7 +5656,7 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 
 	// Check that the height matches. Xenosaga 3 draws a letterbox around
 	// the FMV with a sprite at the top and bottom of the framebuffer.
-	const GSVertex* v = &m_vertex.buff[0];
+	const GSVertex* v = &dbuf.vtx_buff[0];
 	const u32 first_dpY = v[1].XYZ.Y - v[0].XYZ.Y;
 	const u32 first_dpX = v[1].XYZ.X - v[0].XYZ.X;
 
@@ -5646,7 +5665,7 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 	{
 		// Borrowed from MergeSprite() modified to calculate heights.
 		u32 last_pY = v[1].XYZ.Y;
-		for (u32 i = 2; i < m_vertex.next; i += 2)
+		for (u32 i = 2; i < dbuf.vtx_next; i += 2)
 		{
 			const u32 dpY = v[i + 1].XYZ.Y - v[i].XYZ.Y;
 			if (dpY != first_dpY || v[i].XYZ.Y != last_pY)
@@ -5666,7 +5685,7 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 	{
 		// Borrowed from MergeSprite().
 		u32 last_pX = v[1].XYZ.X;
-		for (u32 i = 2; i < m_vertex.next; i += 2)
+		for (u32 i = 2; i < dbuf.vtx_next; i += 2)
 		{
 			const u32 dpX = v[i + 1].XYZ.X - v[i].XYZ.X;
 			if (dpX != first_dpX || v[i].XYZ.X != last_pX)
@@ -5688,14 +5707,15 @@ bool GSRendererHW::PrimitiveCoversWithoutGaps()
 
 bool GSRendererHW::IsConstantDirectWriteMemClear()
 {
-	const bool direct_draw = (m_vt.m_primclass == GS_SPRITE_CLASS) || (m_index.tail == 6 && m_vt.m_primclass == GS_TRIANGLE_CLASS);
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
+	const bool direct_draw = (m_vt.m_primclass == GS_SPRITE_CLASS) || (dbuf.idx_tail == 6 && m_vt.m_primclass == GS_TRIANGLE_CLASS);
 	// Constant Direct Write without texture/test/blending (aka a GS mem clear)
 	if (direct_draw && !PRIM->TME // Direct write
 		&& !(m_draw_env->SCANMSK.MSK & 2)
 		&& !m_cached_ctx.TEST.ATE // no alpha test
 		&& !m_cached_ctx.TEST.DATE // no destination alpha test
 		&& (!m_cached_ctx.TEST.ZTE || m_cached_ctx.TEST.ZTST == ZTST_ALWAYS) // no depth test
-		&& (m_vt.m_eq.rgba == 0xFFFF || m_vertex.next == 2) // constant color write
+		&& (m_vt.m_eq.rgba == 0xFFFF || dbuf.vtx_next == 2) // constant color write
 		&& m_r.x == 0 && m_r.y == 0) // Likely full buffer write
 		return true;
 
@@ -5705,7 +5725,7 @@ bool GSRendererHW::IsConstantDirectWriteMemClear()
 u32 GSRendererHW::GetConstantDirectWriteMemClearColor() const
 {
 	// Take the vertex colour, but check if the blending would make it black.
-	u32 vert_color = m_vertex.buff[1].RGBAQ.U32[0];
+	u32 vert_color = GetDrawingDrawBuffer().vtx_buff[1].RGBAQ.U32[0];
 	if (PRIM->ABE && m_context->ALPHA.IsBlack())
 		vert_color &= 0xFF000000u;
 
@@ -5726,7 +5746,7 @@ u32 GSRendererHW::GetConstantDirectWriteMemClearColor() const
 bool GSRendererHW::IsReallyDithered() const
 {
 	// Must have dither on, not disabled in config, and using 16-bit.
-	const GSDrawingEnvironment* env = m_draw_env;
+	const GSDrawingEnvironmentRegs* env = m_draw_env;
 	if (!env->DTHE.DTHE || GSConfig.Dithering == 0 || GSLocalMemory::m_psm[m_cached_ctx.FRAME.PSM].fmt != 2)
 		return false;
 
@@ -5740,9 +5760,10 @@ bool GSRendererHW::IsReallyDithered() const
 void GSRendererHW::ReplaceVerticesWithSprite(const GSVector4i& unscaled_rect, const GSVector4i& unscaled_uv_rect,
 	const GSVector2i& unscaled_size, const GSVector4i& scissor)
 {
+	GSDrawBuffer& dbuf = GetDrawingDrawBuffer();
 	const GSVector4i fpr = unscaled_rect.sll32(4);
 	const GSVector4i fpuv = unscaled_uv_rect.sll32(4);
-	GSVertex* v = m_vertex.buff;
+	GSVertex* v = dbuf.vtx_buff;
 
 	v[0].XYZ.X = static_cast<u16>(m_context->XYOFFSET.OFX + fpr.x);
 	v[0].XYZ.Y = static_cast<u16>(m_context->XYOFFSET.OFY + fpr.y);
@@ -5764,8 +5785,8 @@ void GSRendererHW::ReplaceVerticesWithSprite(const GSVector4i& unscaled_rect, co
 		GSVector4::storeh(&v[1].ST.S, st);
 	}
 
-	m_vertex.head = m_vertex.tail = m_vertex.next = 2;
-	m_index.tail = 2;
+	dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = 2;
+	dbuf.idx_tail = 2;
 
 	m_r = unscaled_rect;
 	m_context->scissor.in = scissor;

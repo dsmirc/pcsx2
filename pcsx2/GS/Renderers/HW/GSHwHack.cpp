@@ -561,7 +561,8 @@ bool GSHwHack::GSC_NFSUndercover(GSRendererHW& r, int& skip)
 
 	if (RPRIM->TME && Frame.PSM == PSMCT16S && Frame.FBMSK != 0 && Frame.FBW == 10 && Texture.TBW == 1 && Texture.TBP0 == 0x02800 && Texture.PSM == PSMZ16S)
 	{
-		GSVertex* v = &r.m_vertex.buff[1];
+		GSRendererHW::GSDrawBuffer& dbuf = r.GetDrawingDrawBuffer();
+		GSVertex* v = &dbuf.vtx_buff[1];
 		v[0].XYZ.X = static_cast<u16>(RCONTEXT->XYOFFSET.OFX + (r.m_r.z << 4));
 		v[0].XYZ.Y = static_cast<u16>(RCONTEXT->XYOFFSET.OFY + (r.m_r.w << 4));
 		v[0].U = r.m_r.z << 4;
@@ -572,8 +573,8 @@ bool GSHwHack::GSC_NFSUndercover(GSRendererHW& r, int& skip)
 		r.m_vt.m_max.p.y = r.m_r.w;
 		r.m_vt.m_max.t.x = r.m_r.z;
 		r.m_vt.m_max.t.y = r.m_r.w;
-		r.m_vertex.head = r.m_vertex.tail = r.m_vertex.next = 2;
-		r.m_index.tail = 2;
+		dbuf.vtx_head = dbuf.vtx_tail = dbuf.vtx_next = 2;
+		dbuf.idx_tail = 2;
 		skip = 79;
 	}
 	else
@@ -659,7 +660,7 @@ bool GSHwHack::GSC_BlueTongueGames(GSRendererHW& r, int& skip)
 
 	// This is the giant dither-like depth buffer. We need this on the CPU *and* the GPU for textures which are
 	// rendered on both.
-	if (context->FRAME.FBW == 8 && r.m_index.tail == 32 && r.PRIM->TME && context->TEX0.TBW == 1)
+	if (context->FRAME.FBW == 8 && r.GetDrawingDrawBuffer().idx_tail == 32 && r.PRIM->TME && context->TEX0.TBW == 1)
 	{
 		r.SwPrimRender(r, false, false);
 		return false;
@@ -699,8 +700,9 @@ bool GSHwHack::GSC_MetalGearSolid3(GSRendererHW& r, int& skip)
 	GL_INS("OI_MetalGearSolid3(): %x -> %x, %dx%d, subtract %d", RFBP, RFBP + (RFBW / 2), r.m_r.width(), r.m_r.height(),
 		w_sub);
 
-	for (u32 i = 0; i < r.m_vertex.next; i++)
-		r.m_vertex.buff[i].XYZ.X -= w_sub_fp;
+	GSRendererHW::GSDrawBuffer& dbuf = r.GetDrawingDrawBuffer();
+	for (u32 i = 0; i < dbuf.vtx_next; i++)
+		dbuf.vtx_buff[i].XYZ.X -= w_sub_fp;
 
 	// No point adjusting the scissor, it just ends up expanding out anyway.. but we do have to fix up the draw rect.
 	r.m_r -= GSVector4i(w_sub);
@@ -709,7 +711,8 @@ bool GSHwHack::GSC_MetalGearSolid3(GSRendererHW& r, int& skip)
 
 bool GSHwHack::OI_PointListPalette(GSRendererHW& r, GSTexture* rt, GSTexture* ds, GSTextureCache::Source* t)
 {
-	const u32 n_vertices = r.m_vertex.next;
+	GSRendererHW::GSDrawBuffer& dbuf = r.GetDrawingDrawBuffer();
+	const u32 n_vertices = dbuf.vtx_next;
 	const int w = r.m_r.width();
 	const int h = r.m_r.height();
 	const bool is_copy = !r.PRIM->ABE || (
@@ -738,7 +741,7 @@ bool GSHwHack::OI_PointListPalette(GSRendererHW& r, GSTexture* rt, GSTexture* ds
 		const u32 FBP = r.m_cached_ctx.FRAME.Block();
 		const u32 FBW = r.m_cached_ctx.FRAME.FBW;
 		GL_INS("PointListPalette - m_r = <%d, %d => %d, %d>, n_vertices = %u, FBP = 0x%x, FBW = %u", r.m_r.x, r.m_r.y, r.m_r.z, r.m_r.w, n_vertices, FBP, FBW);
-		const GSVertex* RESTRICT v = r.m_vertex.buff;
+		const GSVertex* RESTRICT v = dbuf.vtx_buff;
 		const int ox(r.m_context->XYOFFSET.OFX);
 		const int oy(r.m_context->XYOFFSET.OFY);
 		for (size_t i = 0; i < n_vertices; ++i)
@@ -780,8 +783,9 @@ bool GSHwHack::OI_BigMuthaTruckers(GSRendererHW& r, GSTexture* rt, GSTexture* ds
 		// 224 ntsc, 256 pal.
 		GL_INS("OI_BigMuthaTruckers half bottom offset");
 
-		const size_t count = r.m_vertex.next;
-		GSVertex* v = &r.m_vertex.buff[0];
+		GSRendererHW::GSDrawBuffer& dbuf = r.GetDrawingDrawBuffer();
+		const size_t count = dbuf.vtx_next;
+		GSVertex* v = &dbuf.vtx_buff[0];
 		const u16 offset = (u16)r.m_r.y * 16;
 
 		for (size_t i = 0; i < count; i++)
@@ -946,9 +950,10 @@ bool GSHwHack::OI_ArTonelico2(GSRendererHW& r, GSTexture* rt, GSTexture* ds, GST
 	   buffer to adapt the page width properly.
 	 */
 
-	const GSVertex* v = &r.m_vertex.buff[0];
+	GSRendererHW::GSDrawBuffer& dbuf = r.GetDrawingDrawBuffer();
+	const GSVertex* v = &dbuf.vtx_buff[0];
 
-	if (ds && r.m_vertex.next == 2 && !RPRIM->TME && RFRAME.FBW == 10 && v->XYZ.Z == 0 && RTEST.ZTST == ZTST_ALWAYS)
+	if (ds && dbuf.vtx_next == 2 && !RPRIM->TME && RFRAME.FBW == 10 && v->XYZ.Z == 0 && RTEST.ZTST == ZTST_ALWAYS)
 	{
 		GL_INS("OI_ArTonelico2");
 		g_gs_device->ClearDepth(ds, 0.0f);
