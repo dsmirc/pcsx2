@@ -72,14 +72,13 @@ struct Counter
 	};
 	u32 target, hold;
 	u32 rate, interrupt;
-	u32 sCycleT;		// delta values should be signed.
+	u32 sCycle;		// delta values should be signed.
 };
 
 struct SyncCounter
 {
 	u32 Mode;
-	u32 sCycle;					// start cycle of timer
-	s32 CycleT;
+	cycle_t eCycle;
 };
 
 //------------------------------------------------------------------
@@ -132,8 +131,7 @@ extern Counter counters[4];
 extern SyncCounter hsyncCounter;
 extern SyncCounter vsyncCounter;
 
-extern s32 nextCounter;		// delta until the next counter event (must be signed)
-extern u32 nextsCounter;
+extern cycle_t nextRcntUpdateCycle; // time of next counter event
 extern uint g_FrameCount;
 
 extern void rcntUpdate_hScanline();

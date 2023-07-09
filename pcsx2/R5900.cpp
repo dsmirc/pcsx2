@@ -51,7 +51,7 @@ alignas(16) fpuRegisters fpuRegs;
 alignas(16) tlbs tlb[48];
 R5900cpu *Cpu = NULL;
 
-static constexpr uint eeWaitCycles = 3072;
+static constexpr cycle_t eeWaitCycles = 3072;
 
 bool eeEventTestIsActive = false;
 EE_intProcessStatus eeRunInterruptScan = INT_NOT_RUNNING;
@@ -202,70 +202,42 @@ void cpuTlbMissW(u32 addr, u32 bd) {
 	cpuTlbMiss(addr, bd, EXC_CODE_TLBS);
 }
 
-// sets a branch test to occur some time from an arbitrary starting point.
-__fi void cpuSetNextEvent( u32 startCycle, s32 delta )
-{
-	// typecast the conditional to signed so that things don't blow up
-	// if startCycle is greater than our next branch cycle.
-
-	if( (int)(cpuRegs.nextEventCycle - startCycle) > delta )
-	{
-		cpuRegs.nextEventCycle = startCycle + delta;
-	}
-}
-
-// sets a branch to occur some time from the current cycle
-__fi void cpuSetNextEventDelta( s32 delta )
-{
-	cpuSetNextEvent( cpuRegs.cycle, delta );
-}
-
 __fi int cpuGetCycles(int interrupt)
 {
-	if(interrupt == VU_MTVU_BUSY && (!THREAD_VU1 || INSTANT_VU1))
+	if (interrupt == VU_MTVU_BUSY && (!THREAD_VU1 || INSTANT_VU1))
+	{
 		return 1;
+	}
 	else
 	{
-		const int cycles = (cpuRegs.sCycle[interrupt] + cpuRegs.eCycle[interrupt]) - cpuRegs.cycle;
-		return std::max(1, cycles);
+		const cycle_t cycles = cpuRegs.intCycle[interrupt] - cpuRegs.cycle;
+		return std::max<cycle_t>(1, cycles);
 	}
-
 }
 
-// tests the cpu cycle against the given start and delta values.
-// Returns true if the delta time has passed.
-__fi int cpuTestCycle( u32 startCycle, s32 delta )
+__fi void cpuClearInt(uint i)
 {
-	// typecast the conditional to signed so that things don't explode
-	// if the startCycle is ahead of our current cpu cycle.
-
-	return (int)(cpuRegs.cycle - startCycle) >= delta;
-}
-
-// tells the EE to run the branch test the next time it gets a chance.
-__fi void cpuSetEvent()
-{
-	cpuRegs.nextEventCycle = cpuRegs.cycle;
-}
-
-__fi void cpuClearInt( uint i )
-{
-	pxAssume( i < 32 );
+	pxAssume(i < 32);
 	cpuRegs.interrupt &= ~(1 << i);
 	cpuRegs.dmastall &= ~(1 << i);
 }
 
-static __fi void TESTINT( u8 n, void (*callback)() )
+static __fi void TESTINT(u8 n, void (*callback)())
 {
-	if( !(cpuRegs.interrupt & (1 << n)) ) return;
+	if (!(cpuRegs.interrupt & (1 << n)))
+		return;
 
-	if(CHECK_INSTANTDMAHACK || cpuTestCycle( cpuRegs.sCycle[n], cpuRegs.eCycle[n] ) )
+	// TODO: extract this out, so we have two versions, one with instant and one without
+	const cycle_t eCycle = cpuRegs.intCycle[n];
+	if (CHECK_INSTANTDMAHACK || cpuTestCycle(eCycle))
 	{
-		cpuClearInt( n );
+		cpuClearInt(n);
 		callback();
 	}
 	else
-		cpuSetNextEvent( cpuRegs.sCycle[n], cpuRegs.eCycle[n] );
+	{
+		cpuSetNextEvent(eCycle);
+	}
 }
 
 // [TODO] move this function to Dmac.cpp, and remove most of the DMAC-related headers from
@@ -391,7 +363,7 @@ __fi void _cpuEventTest_Shared()
 	// escape/suspend hooks, and it's really a good idea to suspend/resume emulation before
 	// doing any actual meaningful branchtest logic.
 
-	if (cpuTestCycle(nextsCounter, nextCounter))
+	if (cpuTestCycle(nextRcntUpdateCycle))
 	{
 		rcntUpdate();
 		_cpuTestPERF();
@@ -470,7 +442,7 @@ __fi void _cpuEventTest_Shared()
 	}
 
 	// Apply vsync and other counter nextCycles
-	cpuSetNextEvent(nextsCounter, nextCounter);
+	cpuSetNextEvent(nextRcntUpdateCycle);
 
 	eeEventTestIsActive = false;
 }
@@ -536,7 +508,7 @@ __fi void CPU_SET_DMASTALL(EE_EventType n, bool set)
 		cpuRegs.dmastall &= ~(1 << n);
 }
 
-__fi void CPU_INT( EE_EventType n, s32 ecycle)
+__fi void CPU_INT(EE_EventType n, cycle_t ecycle)
 {
 	// If it's retunning too quick, just rerun the DMA, there's no point in running the EE for < 4 cycles.
 	// This causes a huge uplift in performance for ONI FMV's.
@@ -544,8 +516,7 @@ __fi void CPU_INT( EE_EventType n, s32 ecycle)
 	{
 		eeRunInterruptScan = INT_REQ_LOOP;
 		cpuRegs.interrupt |= 1 << n;
-		cpuRegs.sCycle[n] = cpuRegs.cycle;
-		cpuRegs.eCycle[n] = 0;
+		cpuRegs.intCycle[n] = cpuRegs.cycle;
 		return;
 	}
 
@@ -555,9 +526,10 @@ __fi void CPU_INT( EE_EventType n, s32 ecycle)
 	if (CHECK_EETIMINGHACK && n < VIF_VU0_FINISH)
 		ecycle = 8;
 
+	const cycle_t int_cycle = cpuRegs.cycle + ecycle;
 	cpuRegs.interrupt |= 1 << n;
-	cpuRegs.sCycle[n] = cpuRegs.cycle;
-	cpuRegs.eCycle[n] = ecycle;
+	cpuRegs.intCycle[n] = int_cycle;
+	cpuSetNextEvent(int_cycle);
 
 	// Interrupt is happening soon: make sure both EE and IOP are aware.
 
@@ -569,8 +541,6 @@ __fi void CPU_INT( EE_EventType n, s32 ecycle)
 		psxRegs.iopBreak += psxRegs.iopCycleEE; // record the number of cycles the IOP didn't run.
 		psxRegs.iopCycleEE = 0;
 	}
-
-	cpuSetNextEventDelta(cpuRegs.eCycle[n]);
 }
 
 // Count arguments, save their starting locations, and replace the space separators with null terminators so they're separate strings

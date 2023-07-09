@@ -16,6 +16,7 @@
 #pragma once
 
 #include "common/Pcsx2Defs.h"
+#include "MemoryTypes.h"
 
 // --------------------------------------------------------------------------------------
 //  EE Bios function name tables.
@@ -130,9 +131,8 @@ struct cpuRegisters {
 	u32 pc;				// Program counter, when changing offset in struct, check iR5900-X.S to make sure offset is correct
 	u32 code;			// current instruction
 	PERFregs PERF;
-	u32 eCycle[32];
-	u32 sCycle[32];		// for internal counters
-	u32 cycle;			// calculate cpucycles..
+	cycle_t cycle; // calculate cpucycles..
+	cycle_t intCycle[32];
 	u32 interrupt;
 	int branch;
 	int opmode;			// operating mode
@@ -141,10 +141,10 @@ struct cpuRegisters {
 	u32 pcWriteback;
 
 	// if cpuRegs.cycle is greater than this cycle, should check cpuEventTest for updates
-	u32 nextEventCycle;
-	u32 lastEventCycle;
-	u32 lastCOP0Cycle;
-	u32 lastPERFCycle[2];
+	cycle_t nextEventCycle;
+	cycle_t lastEventCycle;
+	cycle_t lastCOP0Cycle;
+	cycle_t lastPERFCycle[2];
 };
 
 // used for optimization
@@ -368,7 +368,7 @@ enum EE_EventType
 	VU_MTVU_BUSY
 };
 
-extern void CPU_INT( EE_EventType n, s32 ecycle );
+extern void CPU_INT(EE_EventType n, cycle_t ecycle);
 extern void CPU_SET_DMASTALL(EE_EventType n, bool set);
 extern uint intcInterrupt();
 extern uint dmacInterrupt();
@@ -382,10 +382,19 @@ extern void cpuClearInt(uint n);
 extern void GoemonPreloadTlb();
 extern void GoemonUnloadTlb(u32 key);
 
-extern void cpuSetNextEvent( u32 startCycle, s32 delta );
-extern void cpuSetNextEventDelta( s32 delta );
-extern int  cpuTestCycle( u32 startCycle, s32 delta );
-extern void cpuSetEvent();
+// sets an event test to occur some time from an arbitrary starting point.
+__fi static void cpuSetNextEvent(cycle_t int_cycle) { cpuRegs.nextEventCycle = std::min(cpuRegs.nextEventCycle, int_cycle); }
+
+// sets an event test to occur some time from the current cycle
+__fi static void cpuSetNextEventDelta(cycle_t delta) { cpuSetNextEvent(cpuRegs.cycle + delta); }
+
+// tests the cpu cycle against the given start and delta values.
+// Returns true if the delta time has passed.
+__fi static int cpuTestCycle(cycle_t cycle) { return (cpuRegs.cycle >= cycle); }
+
+// tells the EE to run the event test the next time it gets a chance.
+__fi static void cpuSetEvent() { cpuSetNextEventDelta(0); }
+
 extern int cpuGetCycles(int interrupt);
 
 extern void _cpuEventTest_Shared();		// for internal use by the Dynarecs and Ints inside R5900:

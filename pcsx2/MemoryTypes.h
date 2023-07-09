@@ -16,6 +16,8 @@
 #pragma once
 #include "common/Pcsx2Defs.h"
 
+using cycle_t = s64;
+
 namespace Ps2MemSize
 {
 	static const uint MainRam	= _32mb;			// 32 MB main memory!

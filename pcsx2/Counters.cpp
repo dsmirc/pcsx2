@@ -52,13 +52,10 @@ Counter counters[4];
 SyncCounter hsyncCounter;
 SyncCounter vsyncCounter;
 
-u32 nextsCounter;	// records the cpuRegs.cycle value of the last call to rcntUpdate()
-s32 nextCounter;	// delta from nextsCounter, in cycles, until the next rcntUpdate()
+cycle_t nextRcntUpdateCycle;
 
-// Forward declarations needed because C/C++ both are wimpy single-pass compilers.
-
-static void rcntStartGate(bool mode, u32 sCycle);
-static void rcntEndGate(bool mode, u32 sCycle);
+static void rcntStartGate(bool mode, cycle_t sCycle);
+static void rcntEndGate(bool mode, cycle_t sCycle);
 static void rcntWcount(int index, u32 value);
 static void rcntWmode(int index, u32 value);
 static void rcntWtarget(int index, u32 value);
@@ -100,7 +97,7 @@ static __fi void _rcntSet( int cntidx )
 	// (we probably missed it because we're doing/checking other things)
 	if( counter.count > 0x10000 || counter.count > counter.target )
 	{
-		nextCounter = 4;
+		nextRcntUpdateCycle = cpuRegs.cycle + 4;
 		return;
 	}
 
@@ -180,9 +177,9 @@ void rcntInit()
 	counters[3].interrupt = 12;
 
 	hsyncCounter.Mode = MODE_HRENDER;
-	hsyncCounter.sCycle = cpuRegs.cycle;
+	hsyncCounter.eCycle = cpuRegs.cycle + vSyncInfo.hRender;
 	vsyncCounter.Mode = MODE_VRENDER;
-	vsyncCounter.sCycle = cpuRegs.cycle;
+	vsyncCounter.eCycle = cpuRegs.cycle + vSyncInfo.Render;
 
 	for (i=0; i<4; i++) rcntReset(i);
 	cpuRcntSet();
@@ -466,10 +463,9 @@ void UpdateVSyncRate(bool force)
 		if (custom && video_mode_initialized)
 			Console.Indent().WriteLn(Color_StrongGreen, "... with user configured refresh rate: %.02f Hz", vertical_frequency);
 
-		hsyncCounter.CycleT = vSyncInfo.hRender; // Amount of cycles before the counter will be updated
-		vsyncCounter.CycleT = vSyncInfo.Render;  // Amount of cycles before the counter will be updated
-		hsyncCounter.sCycle = cpuRegs.cycle;
-		vsyncCounter.sCycle = cpuRegs.cycle;
+		// TODO: is resetting this correct? doesn't seem like it..
+		hsyncCounter.eCycle = cpuRegs.cycle + vSyncInfo.hRender; // Amount of cycles before the counter will be updated
+		vsyncCounter.eCycle = cpuRegs.cycle + vSyncInfo.Render;  // Amount of cycles before the counter will be updated
 		vsyncCounter.Mode = MODE_VRENDER;
 		cpuRcntSet();
 
@@ -604,7 +600,7 @@ static __fi void frameLimit()
 	m_iStart = uExpectedEnd;
 }
 
-static __fi void VSyncStart(u32 sCycle)
+static __fi void VSyncStart(cycle_t sCycle)
 {
 	// Update vibration at the end of a frame.
 	VSyncUpdateCore();
@@ -663,7 +659,7 @@ static __fi void GSVSync()
 	}
 }
 
-static __fi void VSyncEnd(u32 sCycle)
+static __fi void VSyncEnd(cycle_t sCycle)
 {
 	if(EmuConfig.Trace.Enabled && EmuConfig.Trace.EE.m_EnableAll)
 		SysTrace.EE.Counters.Write( "    ================  EE COUNTER VSYNC END (frame: %d)  ================", g_FrameCount );
@@ -692,49 +688,52 @@ static int vblankinc = 0;
 
 __fi void rcntUpdate_hScanline()
 {
-	if( !cpuTestCycle( hsyncCounter.sCycle, hsyncCounter.CycleT ) ) return;
+	if (!cpuTestCycle(hsyncCounter.eCycle))
+		return;
 
 	//iopEventAction = 1;
-	if (hsyncCounter.Mode & MODE_HBLANK) { //HBLANK Start
-		rcntStartGate(false, hsyncCounter.sCycle);
+	if (hsyncCounter.Mode & MODE_HBLANK)
+	{ //HBLANK Start
+		rcntStartGate(false, hsyncCounter.eCycle);
 		psxCheckStartGate16(0);
 
 		// Setup the hRender's start and end cycle information:
-		hsyncCounter.sCycle += vSyncInfo.hBlank;		// start  (absolute cycle value)
-		hsyncCounter.CycleT = vSyncInfo.hRender;		// endpoint (delta from start value)
+		hsyncCounter.eCycle += vSyncInfo.hRender;
 		hsyncCounter.Mode = MODE_HRENDER;
 	}
-	else { //HBLANK END / HRENDER Begin
+	else
+	{ //HBLANK END / HRENDER Begin
 		if (!CSRreg.HSINT)
 		{
 			CSRreg.HSINT = true;
 			if (!GSIMR.HSMSK)
 				gsIrq();
 		}
-		if (gates) rcntEndGate(false, hsyncCounter.sCycle);
-		if (psxhblankgate) psxCheckEndGate16(0);
+		if (gates)
+			rcntEndGate(false, hsyncCounter.eCycle);
+		if (psxhblankgate)
+			psxCheckEndGate16(0);
 
 		// set up the hblank's start and end cycle information:
-		hsyncCounter.sCycle += vSyncInfo.hRender;	// start (absolute cycle value)
-		hsyncCounter.CycleT = vSyncInfo.hBlank;		// endpoint (delta from start value)
+		hsyncCounter.eCycle += vSyncInfo.hBlank;
 		hsyncCounter.Mode = MODE_HBLANK;
 
-#		ifdef VSYNC_DEBUG
+#ifdef VSYNC_DEBUG
 		hsc++;
-#		endif
+#endif
 	}
 }
 
 __fi void rcntUpdate_vSync()
 {
-	if (!cpuTestCycle(vsyncCounter.sCycle, vsyncCounter.CycleT)) return;
+	if (!cpuTestCycle(vsyncCounter.eCycle))
+		return;
 
 	if (vsyncCounter.Mode == MODE_VSYNC)
 	{
-		VSyncEnd(vsyncCounter.sCycle);
+		VSyncEnd(vsyncCounter.eCycle);
 
-		vsyncCounter.sCycle += vSyncInfo.Blank;
-		vsyncCounter.CycleT = vSyncInfo.Render;
+		vsyncCounter.eCycle += vSyncInfo.Render;
 		vsyncCounter.Mode = MODE_VRENDER;
 	}
 	else if (vsyncCounter.Mode == MODE_GSBLANK) // GS CSR Swap and interrupt
@@ -743,18 +742,17 @@ __fi void rcntUpdate_vSync()
 
 		vsyncCounter.Mode = MODE_VSYNC;
 		// Don't set the start cycle, makes it easier to calculate the correct Vsync End time
-		vsyncCounter.CycleT = vSyncInfo.Blank;
+		vsyncCounter.eCycle = (vSyncInfo.Blank - vSyncInfo.GSBlank); // TODO FIXME
 	}
 	else	// VSYNC end / VRENDER begin
 	{
-		VSyncStart(vsyncCounter.sCycle);
+		VSyncStart(vsyncCounter.eCycle);
 
-		vsyncCounter.sCycle += vSyncInfo.Render;
-		vsyncCounter.CycleT = vSyncInfo.GSBlank;
 		vsyncCounter.Mode = MODE_GSBLANK;
+		vsyncCounter.eCycle += vSyncInfo.GSBlank;
 
 		// Accumulate hsync rounding errors:
-		hsyncCounter.sCycle += vSyncInfo.hSyncError;
+		hsyncCounter.eCycle += vSyncInfo.hSyncError;
 
 #		ifdef VSYNC_DEBUG
 		vblankinc++;
@@ -873,11 +871,9 @@ static __fi void _rcntSetGate( int index )
 }
 
 // mode - 0 means hblank source, 8 means vblank source.
-static __fi void rcntStartGate(bool isVblank, u32 sCycle)
+static __fi void rcntStartGate(bool isVblank, cycle_t sCycle_)
 {
-	int i;
-
-	for (i=0; i <=3; i++)
+	for (int i = 0; i <= 3; i++)
 	{
 		//if ((mode == 0) && ((counters[i].mode & 0x83) == 0x83))
 		if (!isVblank && counters[i].mode.IsCounting && (counters[i].mode.ClockSource == 3) )
@@ -935,7 +931,7 @@ static __fi void rcntStartGate(bool isVblank, u32 sCycle)
 }
 
 // mode - 0 means hblank signal, 8 means vblank signal.
-static __fi void rcntEndGate(bool isVblank , u32 sCycle)
+static __fi void rcntEndGate(bool isVblank, cycle_t sCycle_)
 {
 	int i;
 
@@ -1165,18 +1161,17 @@ template bool rcntWrite32<0x01>( u32 mem, mem32_t& value );
 
 bool SaveStateBase::rcntFreeze()
 {
-	Freeze( counters );
-	Freeze( hsyncCounter );
-	Freeze( vsyncCounter );
-	Freeze( nextCounter );
-	Freeze( nextsCounter );
-	Freeze( vSyncInfo );
-	Freeze( gsVideoMode );
-	Freeze( gsIsInterlaced );
-	Freeze( gates );
+	Freeze(counters);
+	Freeze(hsyncCounter);
+	Freeze(vsyncCounter);
+	Freeze(nextRcntUpdateCycle);
+	Freeze(vSyncInfo);
+	Freeze(gsVideoMode);
+	Freeze(gsIsInterlaced);
+	Freeze(gates);
 
-	if( IsLoading() )
-		cpuRcntSet();
+	if (IsLoading())
+	cpuRcntSet();
 
 	return IsOkay();
 }

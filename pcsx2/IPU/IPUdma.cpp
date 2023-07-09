@@ -86,7 +86,7 @@ void IPU1dma()
 	if (IPU1Status.DataRequested == false)
 	{
 		// IPU isn't expecting any data, so put it in to wait mode.
-		cpuRegs.eCycle[4] = 0x9999;
+		cpuRegs.intCycle[4] = (cpuRegs.intCycle[4] - cpuRegs.cycle) + 0x9999;
 		CPU_SET_DMASTALL(DMAC_TO_IPU, true);
 		return;
 	}
@@ -139,7 +139,7 @@ void IPU1dma()
 
 		if (!(IPU1Status.DMAFinished && !IPU1Status.InProgress))
 		{
-			cpuRegs.eCycle[4] = 0x9999;//IPU_INT_TO(2048);
+			cpuRegs.intCycle[4] = (cpuRegs.intCycle[4] - cpuRegs.cycle) + 0x9999;//IPU_INT_TO(2048);
 			CPU_SET_DMASTALL(DMAC_TO_IPU, true);
 		}
 		else
@@ -268,7 +268,7 @@ __fi void dmaIPU1() // toIPU
 		if(IPU1Status.DataRequested)
 			IPU1dma();
 		else
-			cpuRegs.eCycle[4] = 0x9999;
+			cpuRegs.intCycle[4] = (cpuRegs.intCycle[4] - cpuRegs.cycle) + 0x9999;
 	}
 	else // Normal Mode
 	{
@@ -279,7 +279,7 @@ __fi void dmaIPU1() // toIPU
 			if (IPU1Status.DataRequested)
 				IPU1dma();
 			else
-				cpuRegs.eCycle[4] = 0x9999;
+				cpuRegs.intCycle[4] = (cpuRegs.intCycle[4] - cpuRegs.cycle) + 0x9999;
 	}
 }
 
