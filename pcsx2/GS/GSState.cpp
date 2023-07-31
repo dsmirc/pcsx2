@@ -3731,8 +3731,12 @@ void GSState::CalcAlphaMinMax(const int tex_alpha_min, const int tex_alpha_max)
 					a.w = env.TEXA.TA0;
 					break;
 				case 2:
-					a.y = env.TEXA.AEM ? 0 : std::min(env.TEXA.TA0, env.TEXA.TA1);
-					a.w = std::max(env.TEXA.TA0, env.TEXA.TA1);
+					a.y = env.TEXA.AEM ?
+							  0 :
+							  ((tex_alpha_min == tex_alpha_max) ? (tex_alpha_min ? env.TEXA.TA1 : env.TEXA.TA0) :
+																  std::min(env.TEXA.TA0, env.TEXA.TA1));
+					a.w = ((tex_alpha_min == tex_alpha_max) ? (tex_alpha_min ? env.TEXA.TA1 : env.TEXA.TA0) :
+															  std::max(env.TEXA.TA0, env.TEXA.TA1));
 					break;
 				case 3:
 					m_mem.m_clut.GetAlphaMinMax32(a.y, a.w);
