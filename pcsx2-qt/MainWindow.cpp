@@ -1,5 +1,5 @@
 /*  PCSX2 - PS2 Emulator for PCs
- *  Copyright (C) 2002-2023  PCSX2 Dev Team
+ *  Copyright (C) 2002-2023 PCSX2 Dev Team
  *
  *  PCSX2 is free software: you can redistribute it and/or modify it under the terms
  *  of the GNU Lesser General Public License as published by the Free Software Found-
@@ -21,6 +21,7 @@
 #include "DisplayWidget.h"
 #include "GameList/GameListRefreshThread.h"
 #include "GameList/GameListWidget.h"
+#include "LogWindow.h"
 #include "MainWindow.h"
 #include "QtHost.h"
 #include "QtUtils.h"
@@ -1937,6 +1938,22 @@ void MainWindow::unregisterForDeviceNotifications()
 	UnregisterDeviceNotification(static_cast<HDEVNOTIFY>(m_device_notification_handle));
 	m_device_notification_handle = nullptr;
 #endif
+}
+
+void MainWindow::moveEvent(QMoveEvent* event)
+{
+	QMainWindow::moveEvent(event);
+
+	if (g_log_window && g_log_window->isAttachedToMainWindow())
+		g_log_window->reattachToMainWindow();
+}
+
+void MainWindow::resizeEvent(QResizeEvent* event)
+{
+	QMainWindow::resizeEvent(event);
+
+	if (g_log_window && g_log_window->isAttachedToMainWindow())
+		g_log_window->reattachToMainWindow();
 }
 
 #ifdef _WIN32

@@ -205,6 +205,8 @@ protected:
 	void changeEvent(QEvent* event) override;
 	void dragEnterEvent(QDragEnterEvent* event) override;
 	void dropEvent(QDropEvent* event) override;
+	void moveEvent(QMoveEvent* event) override;
+	void resizeEvent(QResizeEvent* event) override;
 
 #ifdef _WIN32
 	bool nativeEvent(const QByteArray& eventType, void* message, qintptr* result) override;

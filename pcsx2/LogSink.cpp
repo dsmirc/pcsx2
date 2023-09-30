@@ -66,10 +66,13 @@ static const char s_console_colors[][ConsoleColors_Count] = {
 };
 #undef CC
 
-static bool s_block_system_console = false;
 static Common::Timer::Value s_log_start_timestamp = Common::Timer::GetCurrentValue();
-static bool s_log_timestamps = false;
 static std::mutex s_log_mutex;
+static ConsoleColors s_last_color = Color_Default;
+static bool s_block_system_console = false;
+static bool s_log_to_system_console = false;
+static bool s_log_to_window = false;
+static bool s_log_timestamps = false;
 
 // Replacement for Console so we actually get output to our console window on Windows.
 #ifdef _WIN32
@@ -112,6 +115,11 @@ static bool EnableVirtualTerminalProcessing(HANDLE hConsole)
 
 static void ConsoleQt_SetTitle(const char* title)
 {
+	std::unique_lock lock(s_log_mutex);
+
+	if (s_log_to_window)
+		Host::SetLogWindowTitle(title);
+
 #ifdef _WIN32
 	SetConsoleTitleW(StringUtil::UTF8StringToWideString(title).c_str());
 #else
@@ -121,6 +129,10 @@ static void ConsoleQt_SetTitle(const char* title)
 
 static void ConsoleQt_DoSetColor(ConsoleColors color)
 {
+	std::unique_lock lock(s_log_mutex);
+
+	s_last_color = color;
+
 #ifdef _WIN32
 	if (s_console_handle == INVALID_HANDLE_VALUE)
 		return;
@@ -138,6 +150,9 @@ static void ConsoleQt_DoWrite(const char* fmt)
 {
 	std::unique_lock lock(s_log_mutex);
 
+	if (s_log_to_window)
+		Host::AppendToLogWindow(true, -1.0f, s_last_color, fmt);
+
 #ifdef _WIN32
 	if (s_console_handle != INVALID_HANDLE_VALUE || s_debugger_attached)
 	{
@@ -154,13 +169,12 @@ static void ConsoleQt_DoWrite(const char* fmt)
 		}
 	}
 #else
-	std::fputs(fmt, stdout);
+	if (s_log_to_system_console)
+		std::fputs(fmt, stdout);
 #endif
 
 	if (emuLog)
-	{
 		std::fputs(fmt, emuLog);
-	}
 }
 
 static void ConsoleQt_DoWriteLn(const char* fmt)
@@ -171,7 +185,7 @@ static void ConsoleQt_DoWriteLn(const char* fmt)
 	float message_time =
 		s_log_timestamps ?
 			static_cast<float>(Common::Timer::ConvertValueToSeconds(Common::Timer::GetCurrentValue() - s_log_start_timestamp)) :
-            0.0f;
+			-1.0f;
 
 	// split newlines up
 	const char* start = fmt;
@@ -190,6 +204,9 @@ static void ConsoleQt_DoWriteLn(const char* fmt)
 			line = std::string_view(start);
 			start = nullptr;
 		}
+
+		if (s_log_to_window)
+			Host::AppendToLogWindow(false, message_time, s_last_color, line);
 
 #ifdef _WIN32
 		if (s_console_handle != INVALID_HANDLE_VALUE || s_debugger_attached)
@@ -222,15 +239,18 @@ static void ConsoleQt_DoWriteLn(const char* fmt)
 			}
 		}
 #else
-		if (s_log_timestamps)
+		if (s_log_to_system_console)
 		{
-			std::fprintf(stdout, "[%10.4f] %.*s\n", message_time, static_cast<int>(line.length()), line.data());
-		}
-		else
-		{
-			if (!line.empty())
-				std::fwrite(line.data(), line.length(), 1, stdout);
-			std::fputc('\n', stdout);
+			if (s_log_timestamps)
+			{
+				std::fprintf(stdout, "[%10.4f] %.*s\n", message_time, static_cast<int>(line.length()), line.data());
+			}
+			else
+			{
+				if (!line.empty())
+					std::fwrite(line.data(), line.length(), 1, stdout);
+				std::fputc('\n', stdout);
+			}
 		}
 #endif
 
@@ -264,7 +284,7 @@ static const IConsoleWriter ConsoleWriter_WinQt = {
 	ConsoleQt_SetTitle,
 };
 
-static void UpdateLoggingSinks(bool system_console, bool file_log)
+static void UpdateLoggingSinks(bool system_console, bool file_log, bool log_window)
 {
 #ifdef _WIN32
 	const bool debugger_attached = IsDebuggerPresent();
@@ -339,6 +359,8 @@ static void UpdateLoggingSinks(bool system_console, bool file_log)
 	const bool debugger_attached = false;
 #endif
 
+	s_log_to_system_console = system_console;
+
 	if (file_log)
 	{
 		if (!emuLog)
@@ -360,8 +382,17 @@ static void UpdateLoggingSinks(bool system_console, bool file_log)
 		}
 	}
 
+	if (log_window != s_log_to_window)
+	{
+		s_log_to_window = log_window;
+		if (log_window)
+			Host::OpenLogWindow();
+		else
+			Host::CloseLogWindow();
+	}
+
 	// Discard logs completely if there's no sinks.
-	if (debugger_attached || system_console || file_log)
+	if (debugger_attached || system_console || file_log || log_window)
 		Console_SetActiveHandler(ConsoleWriter_WinQt);
 	else
 		Console_SetActiveHandler(ConsoleWriter_Null);
@@ -399,13 +430,14 @@ void LogSink::SetBlockSystemConsole(bool block)
 
 void LogSink::InitializeEarlyConsole()
 {
-	UpdateLoggingSinks(true, false);
+	UpdateLoggingSinks(true, false, false);
 }
 
 void LogSink::UpdateLogging(SettingsInterface& si)
 {
 	const bool system_console_enabled = !s_block_system_console && si.GetBoolValue("Logging", "EnableSystemConsole", false);
 	const bool file_logging_enabled = si.GetBoolValue("Logging", "EnableFileLogging", false);
+	const bool window_logging_enabled = si.GetBoolValue("Logging", "EnableLogWindow", false);
 
 	s_log_timestamps = si.GetBoolValue("Logging", "EnableTimestamps", true);
 
@@ -426,13 +458,14 @@ void LogSink::UpdateLogging(SettingsInterface& si)
 	SysConsole.recordingConsole.Enabled = any_logging_sinks && si.GetBoolValue("Logging", "EnableInputRecordingLogs", true);
 	SysConsole.controlInfo.Enabled = any_logging_sinks && si.GetBoolValue("Logging", "EnableControllerLogs", false);
 
-	UpdateLoggingSinks(system_console_enabled, file_logging_enabled);
+	UpdateLoggingSinks(system_console_enabled, file_logging_enabled, window_logging_enabled);
 }
 
 void LogSink::SetDefaultLoggingSettings(SettingsInterface& si)
 {
 	si.SetBoolValue("Logging", "EnableSystemConsole", false);
 	si.SetBoolValue("Logging", "EnableFileLogging", false);
+	si.SetBoolValue("Logging", "EnableLogWindow", false);
 	si.SetBoolValue("Logging", "EnableTimestamps", true);
 	si.SetBoolValue("Logging", "EnableVerbose", false);
 	si.SetBoolValue("Logging", "EnableEEConsole", false);

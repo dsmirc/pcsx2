@@ -1,5 +1,5 @@
 /*  PCSX2 - PS2 Emulator for PCs
- *  Copyright (C) 2002-2023  PCSX2 Dev Team
+ *  Copyright (C) 2002-2023 PCSX2 Dev Team
  *
  *  PCSX2 is free software: you can redistribute it and/or modify it under the terms
  *  of the GNU Lesser General Public License as published by the Free Software Found-
@@ -14,6 +14,8 @@
  */
 
 #pragma once
+
+#include <string_view>
 
 class SettingsInterface;
 
@@ -36,4 +38,17 @@ namespace LogSink
 
 	/// Stores default logging settings to the specified file.
 	void SetDefaultLoggingSettings(SettingsInterface& si);
+}
+
+namespace Host
+{
+	/// Opens the logging window, if supported.
+	void OpenLogWindow();
+
+	/// Closes the logging window, if supported.
+	void CloseLogWindow();
+
+	/// TODO: actually call this
+	void SetLogWindowTitle(std::string_view title);
+	void AppendToLogWindow(bool raw, float timestamp, ConsoleColors color, std::string_view message);
 }

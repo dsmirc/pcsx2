@@ -18,6 +18,7 @@
 #include "AutoUpdaterDialog.h"
 #include "DisplayWidget.h"
 #include "GameList/GameListWidget.h"
+#include "LogWindow.h"
 #include "MainWindow.h"
 #include "QtHost.h"
 #include "QtUtils.h"
@@ -112,6 +113,11 @@ EmuThread::~EmuThread() = default;
 bool EmuThread::isOnEmuThread() const
 {
 	return QThread::currentThread() == this;
+}
+
+bool EmuThread::isOnUIThread() const
+{
+	return QThread::currentThread() == m_ui_thread;
 }
 
 void EmuThread::start()
@@ -1863,6 +1869,9 @@ int main(int argc, char* argv[])
 
 	// Set theme before creating any windows.
 	QtHost::UpdateApplicationTheme();
+
+	// Start logging early.
+	LogWindow::updateSettings();
 
 	// Start up the CPU thread.
 	QtHost::HookSignals();

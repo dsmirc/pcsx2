@@ -72,6 +72,7 @@ public:
 	__fi bool isRunningFullscreenUI() const { return m_run_fullscreen_ui; }
 
 	bool isOnEmuThread() const;
+	bool isOnUIThread() const;
 	bool shouldRenderToMain() const;
 
 	/// Called back from the GS thread when the display state changes (e.g. fullscreen, render to main).
