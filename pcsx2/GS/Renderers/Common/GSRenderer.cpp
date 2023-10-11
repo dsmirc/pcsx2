@@ -224,13 +224,18 @@ bool GSRenderer::Merge(int field)
 
 	m_real_size = GSVector2i(fs.x, fs.y);
 
-	if ((tex[0] == tex[1]) && (src_gs_read[0] == src_gs_read[1]).alltrue() && (dst[0] == dst[1]).alltrue() &&
-		(PCRTCDisplays.PCRTCDisplays[0].displayRect == PCRTCDisplays.PCRTCDisplays[1].displayRect).alltrue() &&
-		(PCRTCDisplays.PCRTCDisplays[0].framebufferRect == PCRTCDisplays.PCRTCDisplays[1].framebufferRect).alltrue() &&
+	if ((tex[0] == tex[1]) &&
+		((src_gs_read[0] == src_gs_read[1]).mask() & 0x3) == 0x3 && ((dst[0] == dst[1]).mask() & 0x3) == 0x3 &&
+		(PCRTCDisplays.PCRTCDisplays[0].magnification == PCRTCDisplays.PCRTCDisplays[1].magnification) &&
+		((PCRTCDisplays.PCRTCDisplays[0].displayRect == PCRTCDisplays.PCRTCDisplays[1].displayRect).mask() & 0xff) == 0xff &&
+		((PCRTCDisplays.PCRTCDisplays[0].framebufferRect == PCRTCDisplays.PCRTCDisplays[1].framebufferRect).mask() & 0xff) == 0xff &&
 		!feedback_merge && !m_regs->PMODE.SLBG)
 	{
 		// the two outputs are identical, skip drawing one of them (the one that is alpha blended)
+		// take the union of the rectangles, because the second may not be larger on both dimensions
 		tex[0] = nullptr;
+		src_gs_read[1] = src_gs_read[1].max(src_gs_read[0]);
+		dst[1] = dst[1].max(dst[0]);
 	}
 
 	const u32 c = (m_regs->BGCOLOR.U32[0] & 0x00FFFFFFu) | (m_regs->PMODE.ALP << 24);
