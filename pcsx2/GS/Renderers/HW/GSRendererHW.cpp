@@ -5116,35 +5116,49 @@ __ri void GSRendererHW::DrawPrims(GSTextureCache::Target* rt, GSTextureCache::Ta
 	m_conf.vs.fst = PRIM->FST;
 
 	// FIXME D3D11 and GL support half pixel center. Code could be easier!!!
-	const GSVector2i rtsize = m_conf.ds ? m_conf.ds->GetSize() : m_conf.rt->GetSize();
-	const float rtscale = (ds ? ds->GetScale() : rt->GetScale());
-	const float sx = 2.0f * rtscale / (rtsize.x << 4);
-	const float sy = 2.0f * rtscale / (rtsize.y << 4);
-	const float ox = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFX));
-	const float oy = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFY));
-	float ox2 = -1.0f / rtsize.x;
-	float oy2 = -1.0f / rtsize.y;
-	float mod_xy = 0.0f;
-	//This hack subtracts around half a pixel from OFX and OFY.
-	//
-	//The resulting shifted output aligns better with common blending / corona / blurring effects,
-	//but introduces a few bad pixels on the edges.
-	if (!rt)
+	const GSTextureCache::Target* rt_or_ds = rt ? rt : ds;
+	const GSVector2i rtsize = rt_or_ds->GetTexture()->GetSize();
+	const float rtscale = rt_or_ds->GetScale();
+	float sx, sy, ox, oy, ox2, oy2;
+	if (GSConfig.UserHacks_HalfPixelOffset != 0)
 	{
-		mod_xy = GetModXYOffset();
+		sx = 2.0f * rtscale / (rtsize.x << 4);
+		sy = 2.0f * rtscale / (rtsize.y << 4);
+		ox = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFX));
+		oy = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFY));
+		ox2 = -1.0f / rtsize.x;
+		oy2 = -1.0f / rtsize.y;
+
+		float mod_xy = 0.0f;
+		//This hack subtracts around half a pixel from OFX and OFY.
+		//
+		//The resulting shifted output aligns better with common blending / corona / blurring effects,
+		//but introduces a few bad pixels on the edges.
+		if (!rt)
+		{
+			mod_xy = GetModXYOffset();
+		}
+		else
+			mod_xy = rt->OffsetHack_modxy;
+
+		if (mod_xy > 1.0f)
+		{
+			ox2 *= mod_xy;
+			oy2 *= mod_xy;
+		}
 	}
 	else
-		mod_xy = rt->OffsetHack_modxy;
-
-	if (mod_xy > 1.0f)
 	{
-		ox2 *= mod_xy;
-		oy2 *= mod_xy;
+		sx = 2.0f / (rt_or_ds->GetUnscaledWidth() << 4);
+		sy = 2.0f / (rt_or_ds->GetUnscaledHeight() << 4);
+		ox = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFX));
+		oy = static_cast<float>(static_cast<int>(m_context->XYOFFSET.OFY));
+		ox2 = -1.0f / rt_or_ds->GetUnscaledWidth();
+		oy2 = -1.0f / rt_or_ds->GetUnscaledHeight();
 	}
 
 	m_conf.cb_vs.vertex_scale = GSVector2(sx, sy);
 	m_conf.cb_vs.vertex_offset = GSVector2(ox * sx + ox2 + 1, oy * sy + oy2 + 1);
-	// END of FIXME
 
 	// GS_SPRITE_CLASS are already flat (either by CPU or the GS)
 	m_conf.ps.iip = (m_vt.m_primclass == GS_SPRITE_CLASS) ? 0 : PRIM->IIP;
