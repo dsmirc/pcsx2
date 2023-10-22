@@ -2533,7 +2533,6 @@ void GSRendererHW::Draw()
 
 	// Deferred update of TEX0. We don't want to change it when we're doing a shuffle/clear, because it
 	// may increase the buffer width, or change PSM, which breaks P8 conversion amongst other things.
-	const bool can_update_size = !is_possible_mem_clear && !m_texture_shuffle && !m_channel_shuffle;
 	if (!m_texture_shuffle && !m_channel_shuffle)
 	{
 		if (rt && (!is_possible_mem_clear || rt->m_TEX0.PSM != FRAME_TEX0.PSM))
@@ -2580,7 +2579,6 @@ void GSRendererHW::Draw()
 	if (ds)
 		ds->Update();
 
-	const GSVector2i resolution = PCRTCDisplays.GetResolution();
 	GSTextureCache::Target* old_rt = nullptr;
 	GSTextureCache::Target* old_ds = nullptr;
 	{
@@ -2598,6 +2596,23 @@ void GSRendererHW::Draw()
 			}
 		}
 
+		// Determine the pixels we're drawing to. We have to halve here for TS, because the sprite doesn't get
+		// corrected until much, much later.
+		GSVector4i update_valid_rect = m_r;
+		if (m_texture_shuffle)
+		{
+			if (m_r.z > t_size.x)
+			{
+				// horizontal shuffle
+				update_valid_rect.z = update_valid_rect.x + (update_valid_rect.width() / 2);
+			}
+			else
+			{
+				// vertical shuffle
+				update_valid_rect.w = update_valid_rect.y + (update_valid_rect.height() / 2);
+			}
+		}
+
 		// We still need to make sure the dimensions of the targets match.
 		const int new_w = std::max(new_size.x, std::max(rt ? rt->m_unscaled_size.x : 0, ds ? ds->m_unscaled_size.x : 0));
 		const int new_h = std::max(new_size.y, std::max(rt ? rt->m_unscaled_size.y : 0, ds ? ds->m_unscaled_size.y : 0));
@@ -2605,8 +2620,8 @@ void GSRendererHW::Draw()
 		{
 			const u32 old_end_block = rt->m_end_block;
 			const bool new_rect = rt->m_valid.rempty();
-			const bool new_height = new_h > rt->GetUnscaledHeight();
-			const int old_height = rt->m_texture->GetHeight();
+			const bool new_height = m_r.w > rt->m_valid.w;
+			const int old_height = rt->m_valid.w;
 
 			pxAssert(rt->GetScale() == target_scale);
 			if (rt->GetUnscaledWidth() != new_w || rt->GetUnscaledHeight() != new_h)
@@ -2614,32 +2629,36 @@ void GSRendererHW::Draw()
 
 			rt->ResizeTexture(new_w, new_h);
 
-			if (!m_texture_shuffle && !m_channel_shuffle)
-			{
-				rt->ResizeValidity(rt->GetUnscaledRect());
-				rt->ResizeDrawn(rt->GetUnscaledRect());
-			}
+			const GSVector4i clamped_update_rect = update_valid_rect.rintersect(rt->GetUnscaledRect());
+			rt->UpdateValidity(clamped_update_rect);
+			rt->UpdateDrawn(clamped_update_rect);
 
-			const GSVector4i update_rect = m_r.rintersect(GSVector4i::loadh(new_size));
-			// Limit to 2x the vertical height of the resolution (for double buffering)
-			rt->UpdateValidity(update_rect, can_update_size || (m_r.w <= (resolution.y * 2) && !m_texture_shuffle));
-			rt->UpdateDrawn(update_rect, can_update_size || (m_r.w <= (resolution.y * 2) && !m_texture_shuffle));
 			// Probably changing to double buffering, so invalidate any old target that was next to it.
 			// This resolves an issue where the PCRTC will find the old target in FMV's causing flashing.
 			// Grandia Xtreme, Onimusha Warlord.
 			if (!new_rect && new_height && old_end_block != rt->m_end_block)
 			{
-				old_rt = g_texture_cache->FindTargetOverlap(rt, GSTextureCache::RenderTarget, m_cached_ctx.FRAME.PSM);
+				old_rt = g_texture_cache->FindTargetOverlap(rt, GSTextureCache::RenderTarget, rt->m_TEX0.PSM);
 
 				if (old_rt && old_rt != rt && GSUtil::HasSharedBits(old_rt->m_TEX0.PSM, rt->m_TEX0.PSM))
 				{
-					const int copy_width = (old_rt->m_texture->GetWidth()) > (rt->m_texture->GetWidth()) ? (rt->m_texture->GetWidth()) : old_rt->m_texture->GetWidth();
-					const int copy_height = (old_rt->m_texture->GetHeight()) > (rt->m_texture->GetHeight() - old_height) ? (rt->m_texture->GetHeight() - old_height) : old_rt->m_texture->GetHeight();
-					GL_INS("RT double buffer copy from FBP 0x%x, %dx%d => %d,%d", old_rt->m_TEX0.TBP0, copy_width, copy_height, 0, old_height);
+					// Only translate a single page, but grab as much as we can afterwards.
+					const GSVector4i dst_rc = GSVector4i(0, old_height, rt->m_valid.z, rt->m_valid.w);
+					const GSVector4i src_rc = g_texture_cache->TranslateAlignedRectByPage(old_rt, rt->m_TEX0.TBP0, rt->m_TEX0.PSM, rt->m_TEX0.TBW, dst_rc);
+					if (!src_rc.rempty() && (!m_r.rintersect(dst_rc).eq(dst_rc) || preserve_rt_color))
+					{
+						const GSVector4i real_src_rc = GSVector4i(src_rc.x, src_rc.y,
+							std::min(old_rt->m_valid.z, src_rc.x + rt->m_valid.z),
+							std::min(old_rt->m_valid.w, src_rc.y + (rt->m_valid.w - old_height)));
+						if (real_src_rc.height() > 0)
+						{
+							GL_INS("RT double buffer copy from FBP 0x%x, %dx%d => %d,%d", old_rt->m_TEX0.TBP0, real_src_rc.width(), real_src_rc.height(), dst_rc.x, dst_rc.y);
+							g_gs_device->CopyRect(old_rt->GetTexture(), rt->GetTexture(), real_src_rc, dst_rc.x, dst_rc.y);
+						}
 
-					// Invalidate has been moved to after DrawPrims(), because we might kill the current sources' backing.
-					g_gs_device->CopyRect(old_rt->m_texture, rt->m_texture, GSVector4i(0, 0, copy_width, copy_height), 0, old_height);
-					preserve_rt_color = true;
+						// Invalidate has been moved to after DrawPrims(), because we might kill the current sources' backing.
+						preserve_rt_color = true;
+					}
 				}
 				else
 				{
@@ -2651,7 +2670,7 @@ void GSRendererHW::Draw()
 		{
 			const u32 old_end_block = ds->m_end_block;
 			const bool new_rect = ds->m_valid.rempty();
-			const bool new_height = new_h > ds->GetUnscaledHeight();
+			const bool new_height = m_r.w > ds->m_valid.w;
 			const int old_height = ds->m_texture->GetHeight();
 
 			pxAssert(ds->GetScale() == target_scale);
@@ -2659,28 +2678,34 @@ void GSRendererHW::Draw()
 				GL_INS("Resize DS from %dx%d to %dx%d", ds->GetUnscaledWidth(), ds->GetUnscaledHeight(), new_w, new_h);
 			ds->ResizeTexture(new_w, new_h);
 
-			if (!m_texture_shuffle && !m_channel_shuffle)
-			{
-				ds->ResizeValidity(ds->GetUnscaledRect());
-				ds->ResizeDrawn(ds->GetUnscaledRect());
-			}
-
-			// Limit to 2x the vertical height of the resolution (for double buffering)
-			ds->UpdateValidity(m_r, can_update_size || m_r.w <= (resolution.y * 2));
-			ds->UpdateDrawn(m_r, can_update_size || m_r.w <= (resolution.y * 2));
+			const GSVector4i clamped_update_rect = update_valid_rect.rintersect(ds->GetUnscaledRect());
+			ds->UpdateValidity(clamped_update_rect);
+			ds->UpdateDrawn(clamped_update_rect);
 
 			if (!new_rect && new_height && old_end_block != ds->m_end_block)
 			{
-				old_ds = g_texture_cache->FindTargetOverlap(ds, GSTextureCache::DepthStencil, m_cached_ctx.ZBUF.PSM);
+				old_ds = g_texture_cache->FindTargetOverlap(ds, GSTextureCache::DepthStencil, ds->m_TEX0.PSM);
 
 				if (old_ds && old_ds != ds && GSUtil::HasSharedBits(old_ds->m_TEX0.PSM, ds->m_TEX0.PSM))
 				{
-					const int copy_width = (old_ds->m_texture->GetWidth()) > (ds->m_texture->GetWidth()) ? (ds->m_texture->GetWidth()) : old_ds->m_texture->GetWidth();
-					const int copy_height = (old_ds->m_texture->GetHeight()) > (ds->m_texture->GetHeight() - old_height) ? (ds->m_texture->GetHeight() - old_height) : old_ds->m_texture->GetHeight();
-					GL_INS("DS double buffer copy from FBP 0x%x, %dx%d => %d,%d", old_ds->m_TEX0.TBP0, copy_width, copy_height, 0, old_height);
+					const GSVector4i dst_rc = GSVector4i(0, old_height, ds->m_valid.z, ds->m_valid.w);
+					const GSVector4i src_rc = g_texture_cache->TranslateAlignedRectByPage(old_ds, ds->m_TEX0.TBP0, rt->m_TEX0.PSM, rt->m_TEX0.TBW, dst_rc);
+					if (!src_rc.rempty() && (!m_r.rintersect(dst_rc).eq(dst_rc) || preserve_depth))
+					{
+						const GSVector4i real_src_rc = GSVector4i(src_rc.x, src_rc.y,
+							std::min(old_ds->m_valid.z, src_rc.x + ds->m_valid.z),
+							std::min(old_ds->m_valid.w, src_rc.y + (ds->m_valid.w - old_height)));
+						if (real_src_rc.height() > 0)
+						{
+							GL_INS("DS double buffer copy from FBP 0x%x, %dx%d => %d,%d", old_ds->m_TEX0.TBP0,
+								real_src_rc.width(), real_src_rc.height(), dst_rc.x, dst_rc.y);
 
-					g_gs_device->CopyRect(old_ds->m_texture, ds->m_texture, GSVector4i(0, 0, copy_width, copy_height), 0, old_height);
-					preserve_depth = true;
+							g_gs_device->StretchRect(old_ds->GetTexture(), GSVector4(real_src_rc) / GSVector4(old_rt->GetUnscaledSize()).xyxy(),
+								ds->GetTexture(), GSVector4(dst_rc), ShaderConvert::DEPTH_COPY, false);
+
+							preserve_depth = true;
+						}
+					}
 				}
 				else
 				{
@@ -2822,10 +2847,6 @@ void GSRendererHW::Draw()
 
 	if ((fm & fm_mask) != fm_mask && rt)
 	{
-		//rt->m_valid = rt->m_valid.runion(r);
-		// Limit to 2x the vertical height of the resolution (for double buffering)
-		rt->UpdateValidity(m_r, can_update_size || (m_r.w <= (resolution.y * 2) && !m_texture_shuffle));
-
 		g_texture_cache->InvalidateVideoMem(context->offset.fb, m_r, false);
 
 		// Remove overwritten Zs at the FBP.
@@ -2835,10 +2856,6 @@ void GSRendererHW::Draw()
 
 	if (zm != 0xffffffff && ds)
 	{
-		//ds->m_valid = ds->m_valid.runion(r);
-		// Limit to 2x the vertical height of the resolution (for double buffering)
-		ds->UpdateValidity(m_r, can_update_size || (m_r.w <= (resolution.y * 2) && !m_texture_shuffle));
-
 		g_texture_cache->InvalidateVideoMem(context->offset.zb, m_r, false);
 
 		// Remove overwritten RTs at the ZBP.

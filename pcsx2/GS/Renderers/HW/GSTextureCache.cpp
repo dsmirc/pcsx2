@@ -3572,7 +3572,7 @@ GSTextureCache::Target* GSTextureCache::FindOverlappingTarget(u32 BP, u32 end_bp
 	{
 		for (Target* tgt : m_dst[i])
 		{
-			if (CheckOverlap(tgt->m_TEX0.TBP0, tgt->m_end_block, BP, end_bp))
+			if (CheckOverlap(tgt->m_TEX0.TBP0, tgt->UnwrappedEndBlock(), BP, end_bp))
 				return tgt;
 		}
 	}
