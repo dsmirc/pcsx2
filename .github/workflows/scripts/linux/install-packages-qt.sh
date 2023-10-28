@@ -5,6 +5,11 @@ source "$SCRIPTDIR/functions.sh"
 
 set -e
 
+dpkg -l | grep libstdc++
+dpkg -S /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+ls -lh /usr/lib/x86_64-linux-gnu/libstdc++.so.6
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6  | grep GLIBCXX
+
 # Packages - Build and Qt
 declare -a BUILD_PACKAGES=(
 	"build-essential"
@@ -82,3 +87,5 @@ retry_command sudo apt-get -y install "${BUILD_PACKAGES[@]}"
 PCSX2_PACKAGES=("${PCSX2_PACKAGES[@]}")
 echo "Will install the following packages for pcsx2 - ${PCSX2_PACKAGES[*]}"
 retry_command sudo apt-get -y install "${PCSX2_PACKAGES[@]}"
+
+strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6  | grep GLIBCXX
