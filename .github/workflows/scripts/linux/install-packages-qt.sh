@@ -22,6 +22,7 @@ declare -a BUILD_PACKAGES=(
 	"libpng-dev"
 	"libfreetype-dev"
 	"libinput-dev"
+	"libwebp-dev"
 	"libxcb-*-dev"
 	"libxkbcommon-dev"
 	"libxkbcommon-x11-dev"

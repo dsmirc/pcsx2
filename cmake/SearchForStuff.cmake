@@ -8,6 +8,7 @@ if (WIN32)
 	# We bundle everything on Windows
 	add_subdirectory(3rdparty/zlib EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/libpng EXCLUDE_FROM_ALL)
+	add_subdirectory(3rdparty/libwebp EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/xz EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/D3D12MemAlloc EXCLUDE_FROM_ALL)
 	add_subdirectory(3rdparty/winpixeventruntime EXCLUDE_FROM_ALL)
@@ -47,6 +48,14 @@ else()
 	endif()
 
 	find_package(ZLIB REQUIRED)
+
+	# Use bundled libwebp on MacOS.
+	if(NOT APPLE)
+		find_package(WebP REQUIRED)
+	else()
+		add_subdirectory(3rdparty/libwebp EXCLUDE_FROM_ALL)
+	endif()
+
 
 	## Use CheckLib package to find module
 	include(CheckLib)
@@ -117,7 +126,6 @@ add_library(fast_float INTERFACE)
 target_include_directories(fast_float INTERFACE 3rdparty/rapidyaml/rapidyaml/ext/c4core/src/c4/ext/fast_float/include)
 
 add_subdirectory(3rdparty/jpgd EXCLUDE_FROM_ALL)
-add_subdirectory(3rdparty/libwebp EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/simpleini EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/imgui EXCLUDE_FROM_ALL)
 add_subdirectory(3rdparty/cpuinfo EXCLUDE_FROM_ALL)
