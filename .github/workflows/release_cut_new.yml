@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   cut-release:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'stenzek/pcsx2'
     name: "Create Tag and Release"
     runs-on: ubuntu-latest
     outputs:
@@ -88,7 +88,7 @@ jobs:
   # Build Everything
   # Linux
   build_linux_qt:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'stenzek/pcsx2'
     needs:
       - cut-release
     name: "Linux"
@@ -104,7 +104,7 @@ jobs:
     secrets: inherit
 
   build_linux_flatpak:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'stenzek/pcsx2'
     needs:
       - cut-release
     name: "Linux"
@@ -122,7 +122,7 @@ jobs:
 
   # Windows
   build_windows_qt:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'stenzek/pcsx2'
     needs:
       - cut-release
     name: "Windows"
@@ -139,7 +139,7 @@ jobs:
 
   # MacOS
   build_macos_qt:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'stenzek/pcsx2'
     needs:
       - cut-release
     name: "MacOS"
@@ -153,7 +153,7 @@ jobs:
 
   # Upload the Artifacts
   upload_artifacts:
-    if: github.repository == 'PCSX2/pcsx2'
+    if: github.repository == 'stenzek/pcsx2'
     needs:
       - cut-release
       - build_linux_flatpak
@@ -189,11 +189,11 @@ jobs:
         run: |
           TAG_VAL=${{needs.cut-release.outputs.new_tag}}
           echo "TAG_VAL=${TAG_VAL}"
-          gh release list --repo PCSX2/pcsx2
+          gh release list --repo stenzek/pcsx2
           mkdir -p ${{ github.WORKSPACE }}/ci-artifacts/out
           TAG_VAL=${TAG_VAL} python ./.github/workflows/scripts/releases/rename-release-assets.py
           ls ${{ github.WORKSPACE }}/ci-artifacts/out
-          gh release upload "${TAG_VAL}" ${{ github.WORKSPACE }}/ci-artifacts/out/*  --repo PCSX2/pcsx2 --clobber
+          gh release upload "${TAG_VAL}" ${{ github.WORKSPACE }}/ci-artifacts/out/*  --repo stenzek/pcsx2 --clobber
 
       - name: Publish Release
         env:
@@ -201,7 +201,7 @@ jobs:
         run: |
           TAG_VAL=${{needs.cut-release.outputs.new_tag}}
           echo "TAG_VAL=${TAG_VAL}"
-          gh release edit ${TAG_VAL} --draft=false --repo PCSX2/pcsx2
+          gh release edit ${TAG_VAL} --draft=false --repo stenzek/pcsx2
 
       - uses: actions/setup-node@v4
         with:
