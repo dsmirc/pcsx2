@@ -12,7 +12,7 @@ on:
       os:
         required: false
         type: string
-        default: macos-13
+        default: macos-14
       patchesUrl:
         required: false
         type: string
@@ -58,9 +58,6 @@ jobs:
           echo "#define DEFAULT_UPDATER_CHANNEL \"stable\"" > ./pcsx2-qt/DefaultUpdaterChannel.h
           cat ./pcsx2-qt/DefaultUpdaterChannel.h
 
-      - name: Use Xcode 14.3.1
-        run: sudo xcode-select -s /Applications/Xcode_14.3.1.app
-
       - name: Prepare Artifact Metadata
         id: artifact-metadata
         shell: bash
@@ -74,14 +71,12 @@ jobs:
 
       - name: Install Packages
         env:
-          PLATFORM: "x64"
           HOMEBREW_NO_INSTALL_CLEANUP: 1
           HOMEBREW_NO_ANALYTICS: 1
         run: |
-          # Unlike other packages, brew's MoltenVK build uses MoltenVK's minimum macOS version of 10.13 so we can use it
-          if ! brew install molten-vk ccache nasm; then
+          if ! brew install ccache nasm; then
             brew update
-            brew install molten-vk ccache nasm
+            brew install ccache nasm
           fi
 
       - name: Cache Dependencies
@@ -117,6 +112,7 @@ jobs:
         run: |
           cmake -DCMAKE_PREFIX_PATH="$HOME/deps" \
                 -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_OSX_ARCHITECTURES="x86_64" \
                 -DUSE_OPENGL=OFF \
                 -DDISABLE_ADVANCE_SIMD=ON \
                 -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \

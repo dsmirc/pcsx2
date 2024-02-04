@@ -95,14 +95,6 @@ make -C build install
 make install
 cd ..
 
-echo "Installing Zstd..."
-tar xf "zstd-$ZSTD.tar.gz"
-cd "zstd-$ZSTD"
-cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$INSTALLDIR" -DCMAKE_INSTALL_PREFIX="$INSTALLDIR" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=ON -DZSTD_BUILD_PROGRAMS=OFF -B build-dir build/cmake
-make -C build-dir "-j$NPROCS"
-make -C build-dir install
-cd ..
-
 echo "Installing LZ4..."
 tar xf "$LZ4.tar.gz"
 cd "lz4-$LZ4"
@@ -223,6 +215,16 @@ cd build
 make "-j$NPROCS"
 make install
 cd ../..
+
+# Zstd has to get built after Qt, because otherwise Qt tries to run binaries that link to it, and even if
+# we override the dylib search path, cmake/ninja seems to ignore it...
+echo "Installing Zstd..."
+tar xf "zstd-$ZSTD.tar.gz"
+cd "zstd-$ZSTD"
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$INSTALLDIR" -DCMAKE_INSTALL_PREFIX="$INSTALLDIR" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=ON -DZSTD_BUILD_PROGRAMS=OFF -B build-dir build/cmake
+make -C build-dir "-j$NPROCS"
+make -C build-dir install
+cd ..
 
 echo "Cleaning up..."
 cd ..
