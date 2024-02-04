@@ -18,6 +18,7 @@ LZ4=b8fd2d15309dd4e605070bd4486e26b6ef814e29
 PNG=1.6.37
 WEBP=1.3.2
 FFMPEG=6.0
+MOLTENVK=1.2.7
 QT=6.6.0
 
 mkdir -p deps-build
@@ -36,6 +37,7 @@ cat > SHASUMS <<EOF
 505e70834d35383537b6491e7ae8641f1a4bed1876dbfe361201fc80868d88ca  libpng-$PNG.tar.xz
 2a499607df669e40258e53d0ade8035ba4ec0175244869d1025d460562aa09b4  libwebp-$WEBP.tar.gz
 57be87c22d9b49c112b6d24bc67d42508660e6b718b3db89c44e47e289137082  ffmpeg-$FFMPEG.tar.xz
+3166edcfdca886b4be1a24a3c140f11f9a9e8e49878ea999e3580dfbf9fe4bec  v$MOLTENVK.tar.gz
 039d53312acb5897a9054bd38c9ccbdab72500b71fdccdb3f4f0844b0dd39e0e  qtbase-everywhere-src-$QT.tar.xz
 e1542cb50176e237809895c6549598c08587c63703d100be54ac2d806834e384  qtimageformats-everywhere-src-$QT.tar.xz
 33da25fef51102f564624a7ea3e57cb4a0a31b7b44783d1af5749ac36d3c72de  qtsvg-everywhere-src-$QT.tar.xz
@@ -51,6 +53,7 @@ curl -L \
 	-O "https://downloads.sourceforge.net/project/libpng/libpng16/$PNG/libpng-$PNG.tar.xz" \
 	-O "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/libwebp-$WEBP.tar.gz" \
 	-O "https://ffmpeg.org/releases/ffmpeg-$FFMPEG.tar.xz" \
+	-O "https://github.com/KhronosGroup/MoltenVK/archive/refs/tags/v$MOLTENVK.tar.gz" \
 	-O "https://download.qt.io/official_releases/qt/${QT%.*}/$QT/submodules/qtbase-everywhere-src-$QT.tar.xz" \
 	-O "https://download.qt.io/official_releases/qt/${QT%.*}/$QT/submodules/qtimageformats-everywhere-src-$QT.tar.xz" \
 	-O "https://download.qt.io/official_releases/qt/${QT%.*}/$QT/submodules/qtsvg-everywhere-src-$QT.tar.xz" \
@@ -72,7 +75,7 @@ tar xf "ffmpeg-$FFMPEG.tar.xz"
 cd "ffmpeg-$FFMPEG"
 LDFLAGS="-dead_strip $LDFLAGS" CFLAGS="-Os $CFLAGS" CXXFLAGS="-Os $CXXFLAGS" \
 	./configure --prefix="$INSTALLDIR" \
-	--enable-cross-compile --arch=x86_64 --cc='clang -arch x86_64' --cxx='clang++ -arch x86_64' --disable-x86asm \
+	--enable-cross-compile --arch=x86_64 --cc='clang -arch x86_64' --cxx='clang++ -arch x86_64' \
 	--disable-all --disable-autodetect --disable-static --enable-shared \
 	--enable-avcodec --enable-avformat --enable-avutil --enable-swresample --enable-swscale \
 	--enable-audiotoolbox --enable-videotoolbox \
@@ -124,6 +127,15 @@ cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$INSTALLDIR" -DCMAKE_INSTA
 	-DWEBP_BUILD_VWEBP=OFF -DWEBP_BUILD_WEBPINFO=OFF -DWEBP_BUILD_WEBPMUX=OFF -DWEBP_BUILD_EXTRAS=OFF -DBUILD_SHARED_LIBS=ON
 make -C build "-j$NPROCS"
 make -C build install
+cd ..
+
+# MoltenVK already builds universal binaries, nothing special to do here.
+echo "Installing MoltenVK..."
+tar xf "v$MOLTENVK.tar.gz"
+cd "MoltenVK-${MOLTENVK}"
+./fetchDependencies --macos
+make macos
+cp Package/Latest/MoltenVK/dylib/macOS/libMoltenVK.dylib "$INSTALLDIR/lib/"
 cd ..
 
 echo "Installing Qt Base..."
